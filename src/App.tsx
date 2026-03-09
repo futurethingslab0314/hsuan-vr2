@@ -83,7 +83,7 @@ export default function App() {
       const data = await response.json();
 
       if (!response.ok || !data?.ok) {
-        throw new Error(data?.error || 'Failed to create project');
+        throw new Error(data?.detail || data?.error || 'Failed to create project');
       }
 
       setProjectId(data.project_id);
@@ -91,7 +91,8 @@ export default function App() {
     } catch (error) {
       console.error('[handleStartAnalysis]', error);
       setView('home');
-      alert('建立專案失敗，請檢查 Notion 欄位名稱與環境變數後再試一次。');
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      alert(`建立專案失敗: ${message}`);
     } finally {
       setIsCreatingProject(false);
     }
