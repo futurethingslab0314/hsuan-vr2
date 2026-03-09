@@ -9,6 +9,8 @@ type DbProperty = {
   };
 };
 
+type NotionCreatePageProperties = NonNullable<Parameters<typeof notion.pages.create>[0]["properties"]>;
+
 const createProjectSchema = z.object({
   user_name: z.string().trim().min(1).max(100),
   input_prompt: z.string().trim().min(1).max(4000),
@@ -43,7 +45,7 @@ function findPropertyName(
 }
 
 function setTextProperty(
-  target: Record<string, unknown>,
+  target: NotionCreatePageProperties,
   properties: Record<string, DbProperty>,
   propertyName: string | undefined,
   value: string
@@ -66,6 +68,14 @@ function setTextProperty(
   }
 }
 
+function hasProperties(
+  db: Awaited<ReturnType<typeof notion.databases.retrieve>>
+): db is Awaited<ReturnType<typeof notion.databases.retrieve>> & {
+  properties: Record<string, DbProperty>;
+} {
+  return typeof db === "object" && db !== null && "properties" in db;
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -73,9 +83,13 @@ export async function POST(request: Request) {
 
     const databaseId = getNotionDatabaseId("project");
     const db = await notion.databases.retrieve({ database_id: databaseId });
-    const properties = db.properties as Record<string, DbProperty>;
 
-    const pageProperties: Record<string, unknown> = {};
+    if (!hasProperties(db)) {
+      throw new Error("Notion database response missing properties. Please verify NOTION_PROJECT_DB_ID.");
+    }
+
+    const properties = db.properties;
+    const pageProperties: NotionCreatePageProperties = {};
 
     const titlePropertyName = Object.entries(properties).find(([, prop]) => prop.type === "title")?.[0];
     const fallbackTitle = `${payload.user_name} - ${payload.input_prompt}`.slice(0, 120);
