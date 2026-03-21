@@ -15,9 +15,9 @@ export const notion = new Client({
 
 export const notionDatabaseEnvKeys = {
   project: "NOTION_PROJECT_DB_ID",
-  teamMembers: "NOTION_TEAMMEMBERS_DB_ID",
+  teamMembers: "NOTION_TEAM_MEMBER_DB_ID",
   chats: "NOTION_CHATS_DB_ID",
-  reportSections: "NOTION_REPORTSECTIONS_DB_ID",
+  reportSections: "NOTION_REPORT_DB_ID",
 } as const;
 
 export function getNotionDatabaseId(key: keyof typeof notionDatabaseEnvKeys): string {

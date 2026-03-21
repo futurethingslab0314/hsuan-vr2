@@ -2,7 +2,16 @@
 import { TeamMember } from '../types';
 
 export const RelationshipLines = ({ members }: { members: TeamMember[] }) => {
-  const connections = [[members[0], members[1]], [members[1], members[2]], [members[2], members[3]], [members[3], members[0]]];
+  const connections = (() => {
+    if (members.length < 2) return [] as Array<[TeamMember, TeamMember]>;
+    if (members.length === 2) return [[members[0], members[1]]] as Array<[TeamMember, TeamMember]>;
+
+    return members.map((member, index) => [member, members[(index + 1) % members.length]] as [TeamMember, TeamMember]);
+  })();
+
+  const safeConnections = connections.filter(
+    ([m1, m2]) => m1?.position && m2?.position
+  );
 
   return (
     <svg className="absolute inset-0 w-full h-full pointer-events-none overflow-visible">
@@ -14,7 +23,7 @@ export const RelationshipLines = ({ members }: { members: TeamMember[] }) => {
         </linearGradient>
       </defs>
 
-      {connections.map(([m1, m2], i) => (
+      {safeConnections.map(([m1, m2], i) => (
         <motion.line
           key={i}
           x1={`${m1.position.x}%`}

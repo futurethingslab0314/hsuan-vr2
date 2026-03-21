@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { Home } from 'lucide-react';
 import { TeamMember } from './types';
 import { DEFAULT_MEMBERS } from './constants';
+import { PROJECT_STAGE_VALUES } from './constants/projectStages';
 import { CustomCursor } from './components/CustomCursor';
 import { HomeView } from './components/views/HomeView';
 import { LoadingView } from './components/views/LoadingView';
@@ -12,17 +13,88 @@ import { MapView } from './components/views/MapView';
 import { ChatView } from './components/views/ChatView';
 import { PlanView } from './components/views/PlanView';
 
+type ChatMessage = {
+  memberId?: string;
+  role: string;
+  name: string;
+  content: string;
+  type: 'user' | 'bot';
+};
+
+type GeneratedMember = {
+  member_id: string;
+  member_name: string;
+  role_type_ai: string;
+  is_custom_role: boolean;
+};
+
+type GeneratedReport = {
+  report_id: string;
+  report_number: string;
+  report_content: string;
+};
+
+function buildProjectSeed({
+  projectRequirements,
+  designGoals,
+  currentPhase,
+}: {
+  projectRequirements: string;
+  designGoals: string;
+  currentPhase: string;
+}) {
+  const trimmedRequirements = projectRequirements.trim();
+  const collapsed = trimmedRequirements.replace(/\s+/g, ' ');
+  const shortTitle = collapsed.slice(0, 60);
+
+  return {
+    project: shortTitle || 'Untitled Project',
+    input_prompt_user: trimmedRequirements,
+    input_prompt_goal_user: designGoals.trim(),
+    currentstage_user: currentPhase,
+    status: 'draft',
+  };
+}
+
+function mapGeneratedMembersToUi(members: GeneratedMember[]): TeamMember[] {
+  return members.map((member, index) => {
+    const fallback = DEFAULT_MEMBERS[index] ?? DEFAULT_MEMBERS[DEFAULT_MEMBERS.length - 1];
+    return {
+      id: member.member_id,
+      name: member.member_name,
+      role: member.role_type_ai,
+      background: fallback.background,
+      tasks: fallback.tasks,
+      knowledge: fallback.knowledge,
+      workflow: fallback.workflow,
+      responseFormat: fallback.responseFormat,
+      tone: fallback.tone,
+      position: fallback.position,
+    };
+  });
+}
+
+function extractTaggedMemberIds(input: string, members: TeamMember[]): string[] {
+  return members
+    .filter((member) => input.includes(`@${member.name}`))
+    .map((member) => member.id);
+}
+
 export default function App() {
   const [view, setView] = useState<'home' | 'loading' | 'map' | 'chat' | 'plan'>('home');
-  const [inputValue, setInputValue] = useState('');
+  const [projectRequirements, setProjectRequirements] = useState('');
+  const [designGoals, setDesignGoals] = useState('');
+  const [currentPhase, setCurrentPhase] = useState<(typeof PROJECT_STAGE_VALUES)[number]>('discover');
   const [chatInput, setChatInput] = useState('');
-  const [messages, setMessages] = useState<{ role: string; name: string; content: string; type: 'user' | 'bot' }[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isFocused, setIsFocused] = useState(false);
   const [members, setMembers] = useState<TeamMember[]>(DEFAULT_MEMBERS);
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
   const [tempMember, setTempMember] = useState<TeamMember | null>(null);
   const [projectId, setProjectId] = useState<string | null>(null);
   const [isCreatingProject, setIsCreatingProject] = useState(false);
+  const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
+  const [report, setReport] = useState<GeneratedReport | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const handleAddMemberToInput = (name: string) => {
@@ -35,21 +107,84 @@ export default function App() {
     });
   };
 
-  const handleSendMessage = () => {
-    if (!chatInput.trim()) return;
-    const newUserMessage = { role: 'User', name: 'You', content: chatInput, type: 'user' as const };
+  const handleGeneratePlan = async () => {
+    if (!projectId || isGeneratingPlan) return;
+
+    setIsGeneratingPlan(true);
+    setView('plan');
+
+    try {
+      const response = await fetch(`/api/projects/${projectId}/report/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data?.ok) {
+        throw new Error(data?.detail || data?.error || 'Failed to generate report');
+      }
+
+      setReport({
+        report_id: data.report_id,
+        report_number: data.report_number,
+        report_content: data.report_content,
+      });
+    } catch (error) {
+      console.error('[handleGeneratePlan]', error);
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      alert(`生成報告失敗: ${message}`);
+      setView('chat');
+    } finally {
+      setIsGeneratingPlan(false);
+    }
+  };
+
+  const handleSendMessage = async () => {
+    if (!chatInput.trim() || !projectId) return;
+
+    const currentMessage = chatInput.trim();
+    const taggedMembers = extractTaggedMemberIds(currentMessage, members);
+    const newUserMessage: ChatMessage = { role: 'User', name: 'You', content: currentMessage, type: 'user' };
     setMessages((prev) => [...prev, newUserMessage]);
     setChatInput('');
-    setTimeout(() => {
-      const randomMember = members[Math.floor(Math.random() * members.length)];
-      const botResponse = {
-        role: randomMember.role,
-        name: randomMember.name,
-        content: `As the ${randomMember.role}, I've analyzed your input: "${chatInput}".`,
-        type: 'bot' as const,
+
+    try {
+      const response = await fetch(`/api/projects/${projectId}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_message: currentMessage,
+          tagged_members: taggedMembers,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data?.ok) {
+        throw new Error(data?.detail || data?.error || 'Failed to process chat round');
+      }
+
+      const botMessages: ChatMessage[] = data.responses.map((item: { member_id: string; role_type_ai: string; member_name: string; content: string }) => ({
+        memberId: item.member_id,
+        role: item.role_type_ai,
+        name: item.member_name,
+        content: item.content,
+        type: 'bot',
+      }));
+
+      const summaryMessage: ChatMessage = {
+        role: 'System',
+        name: 'System Summary',
+        content: data.system_summary,
+        type: 'bot',
       };
-      setMessages((prev) => [...prev, botResponse]);
-    }, 1000);
+
+      setMessages((prev) => [...prev, ...botMessages, summaryMessage]);
+    } catch (error) {
+      console.error('[handleSendMessage]', error);
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      alert(`對話處理失敗: ${message}`);
+    }
   };
 
   const handleSelectMember = (id: string | null) => {
@@ -64,35 +199,66 @@ export default function App() {
   };
 
   const handleStartAnalysis = async () => {
-    if (!inputValue.trim() || isCreatingProject) return;
+    if (
+      !projectRequirements.trim() ||
+      !designGoals.trim() ||
+      !currentPhase ||
+      isCreatingProject
+    ) {
+      return;
+    }
 
     setIsCreatingProject(true);
     setView('loading');
+    setReport(null);
 
     try {
-      const response = await fetch('/api/projects/create', {
+      const createPayload = buildProjectSeed({
+        projectRequirements,
+        designGoals,
+        currentPhase,
+      });
+      const createResponse = await fetch('/api/projects/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_name: 'User',
-          input_prompt: inputValue,
-          is_public: false,
-        }),
+        body: JSON.stringify(createPayload),
       });
-
-      const data = await response.json();
-
-      if (!response.ok || !data?.ok) {
-        throw new Error(data?.detail || data?.error || 'Failed to create project');
+      const createData = await createResponse.json();
+      if (!createResponse.ok || !createData?.ok) {
+        throw new Error(createData?.detail || createData?.error || 'Failed to create project');
       }
 
-      setProjectId(data.project_id);
+      const nextProjectId = createData.project_id as string;
+      setProjectId(nextProjectId);
+
+      const analyzeResponse = await fetch(`/api/projects/${nextProjectId}/analyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const analyzeData = await analyzeResponse.json();
+      if (!analyzeResponse.ok || !analyzeData?.ok) {
+        throw new Error(analyzeData?.detail || analyzeData?.error || 'Failed to analyze project');
+      }
+
+      const teamResponse = await fetch(`/api/projects/${nextProjectId}/team-members/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const teamData = await teamResponse.json();
+      if (!teamResponse.ok || !teamData?.ok) {
+        throw new Error(teamData?.detail || teamData?.error || 'Failed to generate team members');
+      }
+
+      setMembers(mapGeneratedMembersToUi(teamData.members));
+      setMessages([]);
       setView('map');
     } catch (error) {
       console.error('[handleStartAnalysis]', error);
       setView('home');
       const message = error instanceof Error ? error.message : 'Unknown error';
-      alert(`建立專案失敗: ${message}`);
+      alert(`建立、分析或生成團隊失敗: ${message}`);
     } finally {
       setIsCreatingProject(false);
     }
@@ -116,11 +282,11 @@ export default function App() {
         <AnimatePresence>{view === 'home' && (<motion.button key="signin" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} className="px-8 py-3 bg-black text-white rounded-full text-base font-medium hover:scale-105 transition-transform shadow-lg">Sign in</motion.button>)}</AnimatePresence>
       </nav>
       <AnimatePresence mode="wait">
-        {view === 'home' && <HomeView inputValue={inputValue} setInputValue={setInputValue} isFocused={isFocused} setIsFocused={setIsFocused} handleStartAnalysis={handleStartAnalysis} />}
+        {view === 'home' && <HomeView projectRequirements={projectRequirements} setProjectRequirements={setProjectRequirements} designGoals={designGoals} setDesignGoals={setDesignGoals} currentPhase={currentPhase} setCurrentPhase={setCurrentPhase} isFocused={isFocused} setIsFocused={setIsFocused} handleStartAnalysis={handleStartAnalysis} />}
         {view === 'loading' && <LoadingView />}
-        {view === 'map' && <MapView members={members} selectedMemberId={selectedMemberId} setSelectedMemberId={handleSelectMember} tempMember={tempMember} setTempMember={setTempMember} handleSaveMember={handleSaveMember} inputValue={inputValue} setView={(nextView) => setView(nextView)} />}
-        {view === 'chat' && <ChatView messages={messages} members={members} chatInput={chatInput} setChatInput={setChatInput} handleSendMessage={handleSendMessage} handleAddMemberToInput={handleAddMemberToInput} setView={setView} inputValue={inputValue} chatEndRef={chatEndRef} />}
-        {view === 'plan' && <PlanView setView={(nextView) => setView(nextView)} />}
+        {view === 'map' && <MapView members={members} selectedMemberId={selectedMemberId} setSelectedMemberId={handleSelectMember} tempMember={tempMember} setTempMember={setTempMember} handleSaveMember={handleSaveMember} inputValue={projectRequirements} setView={(nextView) => setView(nextView)} />}
+        {view === 'chat' && <ChatView messages={messages} members={members} chatInput={chatInput} setChatInput={setChatInput} handleSendMessage={handleSendMessage} handleAddMemberToInput={handleAddMemberToInput} setView={setView} handleGeneratePlan={handleGeneratePlan} isGeneratingPlan={isGeneratingPlan} inputValue={projectRequirements} chatEndRef={chatEndRef} />}
+        {view === 'plan' && <PlanView setView={(nextView) => setView(nextView)} reportNumber={report?.report_number ?? null} reportContent={report?.report_content ?? null} isGeneratingPlan={isGeneratingPlan} />}
       </AnimatePresence>
       <CustomCursor currentView={view} />
       {projectId && <span className="hidden">project:{projectId}</span>}

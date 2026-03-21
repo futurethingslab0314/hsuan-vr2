@@ -1,79 +1,20 @@
 ﻿import { NextResponse } from "next/server";
 import { z } from "zod";
 import { notion, getNotionDatabaseId } from "@/src/lib/notion";
-
-type DbProperty = {
-  type: string;
-  select?: {
-    options?: Array<{ name: string }>;
-  };
-};
+import { PROJECT_STAGE_VALUES } from "@/src/constants/projectStages";
 
 type NotionCreatePageProperties = NonNullable<Parameters<typeof notion.pages.create>[0]["properties"]>;
 
 const createProjectSchema = z.object({
-  user_name: z.string().trim().min(1).max(100),
-  input_prompt: z.string().trim().min(1).max(4000),
-  is_public: z.boolean().optional().default(false),
+  project: z.string().trim().min(1).max(120),
+  input_prompt_user: z.string().trim().min(1).max(4000),
+  input_prompt_goal_user: z.string().trim().min(1).max(4000),
+  currentstage_user: z.enum(PROJECT_STAGE_VALUES),
+  status: z.string().trim().min(1).max(100).optional().default("draft"),
 });
 
 function normalize(value: string): string {
   return value.trim().toLowerCase().replace(/[\s-]+/g, "_");
-}
-
-function findPropertyName(
-  properties: Record<string, DbProperty>,
-  candidates: string[],
-  expectedType?: string
-): string | undefined {
-  const normalizedCandidates = new Set(candidates.map(normalize));
-
-  const exactMatch = Object.entries(properties).find(([name, prop]) => {
-    const typeMatches = expectedType ? prop.type === expectedType : true;
-    return typeMatches && normalizedCandidates.has(normalize(name));
-  });
-
-  if (exactMatch) return exactMatch[0];
-
-  const partialMatch = Object.entries(properties).find(([name, prop]) => {
-    const typeMatches = expectedType ? prop.type === expectedType : true;
-    const normalizedName = normalize(name);
-    return typeMatches && Array.from(normalizedCandidates).some((c) => normalizedName.includes(c));
-  });
-
-  return partialMatch?.[0];
-}
-
-function setTextProperty(
-  target: NotionCreatePageProperties,
-  properties: Record<string, DbProperty>,
-  propertyName: string | undefined,
-  value: string
-) {
-  if (!propertyName) return;
-
-  const property = properties[propertyName];
-  if (!property) return;
-
-  if (property.type === "title") {
-    target[propertyName] = {
-      title: [{ type: "text", text: { content: value } }],
-    };
-  }
-
-  if (property.type === "rich_text") {
-    target[propertyName] = {
-      rich_text: [{ type: "text", text: { content: value } }],
-    };
-  }
-}
-
-function hasProperties(
-  db: Awaited<ReturnType<typeof notion.databases.retrieve>>
-): db is Awaited<ReturnType<typeof notion.databases.retrieve>> & {
-  properties: Record<string, DbProperty>;
-} {
-  return typeof db === "object" && db !== null && "properties" in db;
 }
 
 export async function POST(request: Request) {
@@ -82,47 +23,26 @@ export async function POST(request: Request) {
     const payload = createProjectSchema.parse(body);
 
     const databaseId = getNotionDatabaseId("project");
-    const db = await notion.databases.retrieve({ database_id: databaseId });
+    const normalizedStatus = normalize(payload.status);
+    const statusValue = normalizedStatus === "draft" ? "draft" : payload.status;
 
-    if (!hasProperties(db)) {
-      throw new Error("Notion database response missing properties. Please verify NOTION_PROJECT_DB_ID.");
-    }
-
-    const properties = db.properties;
-    const pageProperties: NotionCreatePageProperties = {};
-
-    const titlePropertyName = Object.entries(properties).find(([, prop]) => prop.type === "title")?.[0];
-    const fallbackTitle = `${payload.user_name} - ${payload.input_prompt}`.slice(0, 120);
-    setTextProperty(pageProperties, properties, titlePropertyName, fallbackTitle);
-
-    const userNamePropertyName =
-      findPropertyName(properties, ["user_name", "username", "user"], "rich_text") ??
-      findPropertyName(properties, ["user_name", "username", "user"], "title");
-
-    const inputPromptPropertyName =
-      findPropertyName(properties, ["input_prompt", "prompt", "project_prompt"], "rich_text") ??
-      findPropertyName(properties, ["input_prompt", "prompt", "project_prompt"], "title");
-
-    setTextProperty(pageProperties, properties, userNamePropertyName, payload.user_name);
-    setTextProperty(pageProperties, properties, inputPromptPropertyName, payload.input_prompt);
-
-    const statusPropertyName = findPropertyName(properties, ["status"], "select");
-    if (statusPropertyName) {
-      const options = properties[statusPropertyName]?.select?.options ?? [];
-      const statusName = options.find((o) => normalize(o.name) === "draft")?.name ?? options[0]?.name;
-      if (statusName) {
-        pageProperties[statusPropertyName] = {
-          select: { name: statusName },
-        };
-      }
-    }
-
-    const isPublicPropertyName = findPropertyName(properties, ["is_public", "public"], "checkbox");
-    if (isPublicPropertyName) {
-      pageProperties[isPublicPropertyName] = {
-        checkbox: payload.is_public,
-      };
-    }
+    const pageProperties: NotionCreatePageProperties = {
+      project: {
+        title: [{ type: "text", text: { content: payload.project.slice(0, 120) } }],
+      },
+      input_prompt_user: {
+        rich_text: [{ type: "text", text: { content: payload.input_prompt_user } }],
+      },
+      input_prompt_goal_user: {
+        rich_text: [{ type: "text", text: { content: payload.input_prompt_goal_user } }],
+      },
+      currentstage_user: {
+        select: { name: payload.currentstage_user },
+      },
+      status: {
+        status: { name: statusValue },
+      },
+    };
 
     const page = await notion.pages.create({
       parent: { database_id: databaseId },
@@ -133,6 +53,9 @@ export async function POST(request: Request) {
       {
         ok: true,
         project_id: page.id,
+        project: payload.project,
+        currentstage_user: payload.currentstage_user,
+        status: statusValue,
       },
       { status: 201 }
     );

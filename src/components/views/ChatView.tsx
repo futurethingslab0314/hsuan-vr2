@@ -10,12 +10,26 @@ interface ChatViewProps {
   setChatInput: (val: string) => void;
   handleSendMessage: () => void;
   handleAddMemberToInput: (name: string) => void;
-  setView: (view: 'map' | 'plan') => void;
+  setView: (view: 'map') => void;
+  handleGeneratePlan: () => void;
+  isGeneratingPlan: boolean;
   inputValue: string;
   chatEndRef: React.RefObject<HTMLDivElement | null>;
 }
 
-export const ChatView = ({ messages, members, chatInput, setChatInput, handleSendMessage, handleAddMemberToInput, setView, inputValue, chatEndRef }: ChatViewProps) => {
+export const ChatView = ({
+  messages,
+  members,
+  chatInput,
+  setChatInput,
+  handleSendMessage,
+  handleAddMemberToInput,
+  setView,
+  handleGeneratePlan,
+  isGeneratingPlan,
+  inputValue,
+  chatEndRef,
+}: ChatViewProps) => {
   return (
     <motion.div key="chat" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="fixed inset-0 pt-24 pb-32 flex flex-col max-w-4xl mx-auto">
       <div className="px-8 py-4 flex items-center justify-between border-b border-black/5 mb-4">
@@ -42,7 +56,7 @@ export const ChatView = ({ messages, members, chatInput, setChatInput, handleSen
         </div>
         <div className="flex justify-between mt-6">
           <motion.button whileHover={{ x: -5 }} onClick={() => setView('map')} className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-[#86868B] hover:text-black transition-colors"><ArrowLeft size={16} /> Back to Map</motion.button>
-          <motion.button whileHover={{ x: 5 }} onClick={() => setView('plan')} className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-black hover:opacity-70 transition-opacity">Generate Plan <ChevronRight size={16} /></motion.button>
+          <motion.button whileHover={{ x: isGeneratingPlan ? 0 : 5 }} onClick={handleGeneratePlan} disabled={isGeneratingPlan} className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-black hover:opacity-70 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed">{isGeneratingPlan ? 'Generating Plan...' : 'Generate Plan'} <ChevronRight size={16} /></motion.button>
         </div>
       </div>
     </motion.div>
