@@ -1,6 +1,8 @@
 ﻿import { NextResponse } from "next/server";
 import { z } from "zod";
+import { zodTextFormat } from "openai/helpers/zod";
 import { notion, getNotionDatabaseId } from "@/src/lib/notion";
+import { openai } from "@/src/lib/openai";
 
 type DbProperty = {
   id?: string;
@@ -86,6 +88,35 @@ type ConversationOrchestratorResult = {
   };
   ready_for_report: boolean;
 };
+
+const conversationResponseSchema = z.object({
+  member_id: z.string(),
+  member_name: z.string(),
+  role_type_ai: z.string(),
+  content: z.string(),
+});
+
+const conversationOrchestratorSchema = z.object({
+  message_type: z.enum([
+    "clarification",
+    "product_direction",
+    "feature_scope",
+    "user_flow",
+    "interface_design",
+    "technical_feasibility",
+    "validation",
+    "wrap_up",
+  ]),
+  selected_speakers: z.array(z.string()).max(2),
+  responses: z.array(conversationResponseSchema).max(2),
+  system_summary: z.string(),
+  discussion_state_update: z.object({
+    confirmed_points: z.array(z.string()),
+    assumptions: z.array(z.string()),
+    next_focus: z.string(),
+  }),
+  ready_for_report: z.boolean(),
+});
 
 type DiscussionStage = "clarifying" | "exploring" | "framing" | "wrapping";
 
@@ -390,78 +421,86 @@ function buildConversationOrchestratorInput(projectData: ProjectForChat, members
 }
 
 async function runConversationOrchestrator(input: ConversationOrchestratorInput): Promise<ConversationOrchestratorResult> {
-  const selectedMembers = input.tagged_members.length > 0
-    ? input.members.filter((member) => input.tagged_members.includes(member.member_id))
-    : input.members.slice(0, Math.min(2, input.members.length));
-
-  const stageFraming: Record<string, string> = {
-    discover: "a discovery discussion",
-    define: "a definition and synthesis discussion",
-    develop: "an ideation and concept development discussion",
-    deliver: "an implementation and delivery discussion",
-  };
-
-  const stageSummary: Record<string, { systemSummary: string; confirmedPoints: string[]; assumptions: string[]; nextFocus: string }> = {
-    discover: {
-      systemSummary: "目前共識偏向：先釐清使用者情境、核心問題與研究方向，再決定後續方案。",
-      confirmedPoints: ["目前優先理解問題與情境", "應避免過早跳入具體解法"],
-      assumptions: ["更清楚的研究與問題定義會提升後續決策品質"],
-      nextFocus: "確認主要使用者、情境與核心痛點",
+  const response = await openai.responses.parse({
+    model: "gpt-4o-2024-08-06",
+    input: [
+      {
+        role: "system",
+        content: [
+          {
+            type: "input_text",
+            text: [
+              "You are Conversation Orchestrator for AI Team Builder.",
+              "Your job is to coordinate a small AI team discussion.",
+              "Return only valid structured output.",
+              "Select at most 2 speakers.",
+              "If tagged_members is not empty, prioritize them.",
+              "Responses must reflect each member's role, expertise, workflow, tone, and constraints.",
+              "The second speaker should add support, challenge, tradeoff, implementation, or validation perspective instead of repeating the first.",
+              "system_summary should summarize the current discussion state clearly.",
+              "ready_for_report should be true only when the discussion has enough clarity, confirmed points, and next steps.",
+              "Project stages are: discover, define, develop, deliver.",
+            ].join("\n"),
+          },
+        ],
+      },
+      {
+        role: "user",
+        content: [
+          {
+            type: "input_text",
+            text: JSON.stringify(input, null, 2),
+          },
+        ],
+      },
+    ],
+    text: {
+      format: zodTextFormat(conversationOrchestratorSchema, "conversation_orchestrator_result"),
     },
-    define: {
-      systemSummary: "目前共識偏向：先整合已知資訊並收斂成明確的問題定義與方向框架。",
-      confirmedPoints: ["需要先完成重點整理與方向收斂", "團隊應聚焦於定義核心需求"],
-      assumptions: ["較清楚的定義能降低後續設計與開發偏差"],
-      nextFocus: "整理洞察並明確定義核心需求與優先順序",
-    },
-    develop: {
-      systemSummary: "目前共識偏向：先探索可行概念與關鍵取捨，再收斂成較具體的產品方向。",
-      confirmedPoints: ["需要比較不同概念與方案", "應評估功能取捨與體驗方向"],
-      assumptions: ["適度發散後再收斂有助於找到更好的方向"],
-      nextFocus: "比較候選方案並收斂主要概念方向",
-    },
-    deliver: {
-      systemSummary: "目前共識偏向：先把方向轉成可執行的交付範圍、優先順序與風險控制。",
-      confirmedPoints: ["應聚焦在可交付範圍與執行順序", "需降低實作與交付風險"],
-      assumptions: ["明確的交付計畫能提升落地效率與品質"],
-      nextFocus: "確認實作範圍、依賴關係與近期交付節奏",
-    },
-  };
+  });
 
-  const currentStageSummary = stageSummary[input.project_stage] ?? stageSummary.discover;
+  const parsed = response.output_parsed;
 
-  const responses = selectedMembers.map((member) => ({
-    member_id: member.member_id,
-    member_name: member.member_name,
-    role_type_ai: member.role_type_ai,
-    content: `${member.member_name} recommends treating "${input.user_message}" as ${stageFraming[input.project_stage] ?? "a product discussion"} from the ${member.role_type_ai} perspective.`,
-  }));
+  if (!parsed) {
+    throw new ChatRouteError("Conversation Orchestrator returned no structured output", 500);
+  }
+
+  const selectedMembers =
+    parsed.selected_speakers.length > 0
+      ? input.members.filter((member) => parsed.selected_speakers.includes(member.member_id))
+      : [];
+
+  const fallbackResponses =
+    parsed.responses.length > 0
+      ? parsed.responses
+      : selectedMembers.slice(0, 2).map((member) => ({
+          member_id: member.member_id,
+          member_name: member.member_name,
+          role_type_ai: member.role_type_ai,
+          content: `${member.member_name} is reflecting on "${input.user_message}" from the ${member.role_type_ai} perspective.`,
+        }));
 
   const nextDiscussionStage = determineDiscussionStage({
     currentStage: input.decision_state.discussion_stage_ai,
     userMessage: input.user_message,
-    systemSummary: currentStageSummary.systemSummary,
-    confirmedPoints: currentStageSummary.confirmedPoints,
-    nextFocus: currentStageSummary.nextFocus,
+    systemSummary: parsed.system_summary,
+    confirmedPoints: parsed.discussion_state_update.confirmed_points,
+    nextFocus: parsed.discussion_state_update.next_focus,
   });
 
   const readyForReport =
     nextDiscussionStage === "wrapping" &&
-    currentStageSummary.confirmedPoints.length > 0 &&
-    currentStageSummary.nextFocus.trim().length > 0;
+    parsed.discussion_state_update.confirmed_points.length > 0 &&
+    parsed.discussion_state_update.next_focus.trim().length > 0;
 
   return {
-    message_type: "feature_scope",
+    message_type: parsed.message_type,
     discussion_stage: nextDiscussionStage,
-    selected_speakers: selectedMembers.map((member) => member.member_id),
-    responses,
-    system_summary: currentStageSummary.systemSummary,
-    discussion_state_update: {
-      confirmed_points: currentStageSummary.confirmedPoints,
-      assumptions: currentStageSummary.assumptions,
-      next_focus: currentStageSummary.nextFocus,
-    },
-    ready_for_report: readyForReport,
+    selected_speakers: parsed.selected_speakers,
+    responses: fallbackResponses,
+    system_summary: parsed.system_summary,
+    discussion_state_update: parsed.discussion_state_update,
+    ready_for_report: readyForReport || parsed.ready_for_report,
   };
 }
 
@@ -549,5 +588,3 @@ export async function POST(request: Request, context: { params: Promise<{ projec
     return handleChatRouteError(error);
   }
 }
-
-

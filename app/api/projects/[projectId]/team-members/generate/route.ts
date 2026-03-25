@@ -1,5 +1,8 @@
 ﻿import { NextResponse } from "next/server";
+import { z } from "zod";
+import { zodTextFormat } from "openai/helpers/zod";
 import { notion, getNotionDatabaseId } from "@/src/lib/notion";
+import { openai } from "@/src/lib/openai";
 
 type DbProperty = {
   id?: string;
@@ -58,6 +61,32 @@ type TeamComposerResult = {
   team_rationale: string;
   members: TeamComposerMember[];
 };
+
+const teamComposerMemberSchema = z.object({
+  name: z.string(),
+  role_type: z.enum(["UX", "PM", "UI", "Engineer", "Researcher", "custom"]),
+  custom_role_label: z.string().nullable(),
+  is_custom_role: z.boolean(),
+  background_identity: z.string(),
+  tasks: z.array(z.string()),
+  knowledge: z.array(z.string()),
+  rules: z.string(),
+  workflow: z.string(),
+  response_format: z.string(),
+  tone: z.string(),
+  why_this_role: z.string(),
+  routing_hints: z.object({
+    good_for: z.array(z.string()),
+    avoid_for: z.array(z.string()),
+    pairs_well_with: z.array(z.string()),
+  }),
+  display_order: z.number().int().positive(),
+});
+
+const teamComposerSchema = z.object({
+  team_rationale: z.string(),
+  members: z.array(teamComposerMemberSchema).min(3).max(5),
+});
 
 class TeamGenerationRouteError extends Error {
   statusCode: number;
@@ -189,66 +218,66 @@ function buildTeamComposerInput(projectData: ProjectForTeamGeneration): TeamComp
 
 async function runTeamComposer(projectData: ProjectForTeamGeneration): Promise<TeamComposerResult> {
   const input = buildTeamComposerInput(projectData);
-  const stageLabels: Record<string, string> = {
-    discover: "Discover",
-    define: "Define",
-    develop: "Develop",
-    deliver: "Deliver",
-  };
 
-  return {
-    team_rationale: `A compact cross-functional team for ${projectData.project} in the ${stageLabels[input.project_stage] ?? input.project_stage} phase of the Double Diamond process.`,
-    members: [
+  const response = await openai.responses.parse({
+    model: "gpt-4o-2024-08-06",
+    input: [
       {
-        name: "Maya Chen",
-        role_type: "PM",
-        custom_role_label: null,
-        is_custom_role: false,
-        background_identity: "Product strategist focused on research synthesis, decision framing, and cross-functional alignment.",
-        tasks: ["Define priorities", "Clarify decision criteria", "Keep the team aligned on phase outcomes"],
-        knowledge: ["Research synthesis", "Decision framing", "Double Diamond facilitation"],
-        rules: "Prioritize clarity, tradeoffs, and decision-ready outputs.",
-        workflow: "Works first to frame questions, then coordinates with UX and Engineering.",
-        response_format: "Decision notes, framed options, and next-step recommendations.",
-        tone: "Structured, pragmatic, and strategic.",
-        why_this_role: "This role keeps the project focused and translates analysis into clear phase priorities.",
-        routing_hints: { good_for: ["Prioritization", "Decision framing", "Direction tradeoffs"], avoid_for: ["Detailed visual design", "Low-level implementation debugging"], pairs_well_with: ["UX", "Engineer"] },
-        display_order: 1,
+        role: "system",
+        content: [
+          {
+            type: "input_text",
+            text: [
+              "You are Team Composer for AI Team Builder.",
+              "Your job is to generate a compact AI team for product/design discussion.",
+              "Return only valid structured output.",
+              "Prefer a team of 3 to 5 members.",
+              "Prefer fixed roles from this pool first: UX, PM, UI, Engineer, Researcher.",
+              "Use role_type = custom only when clearly necessary.",
+              "If role_type is not custom, custom_role_label must be null.",
+              "If role_type is custom, custom_role_label must be a meaningful label.",
+              "Members must have distinct responsibilities and complementary perspectives.",
+              "Display order must start at 1 and increase sequentially.",
+              "Project stages are: discover, define, develop, deliver.",
+              "Match the team composition to the project stage and problem.",
+            ].join("\n"),
+          },
+        ],
       },
       {
-        name: "Alex Lin",
-        role_type: "UX",
-        custom_role_label: null,
-        is_custom_role: false,
-        background_identity: "UX researcher and interaction strategist experienced in problem framing and user insight synthesis.",
-        tasks: ["Interpret user needs", "Clarify target users", "Shape solution direction from a user lens"],
-        knowledge: ["JTBD", "User interview synthesis", "Information architecture"],
-        rules: "Anchor recommendations in user context and unresolved questions.",
-        workflow: "Partners with PM to validate goals and with Engineering to keep flows realistic.",
-        response_format: "User insight summaries, opportunity statements, and flow recommendations.",
-        tone: "Curious, analytical, and user-centered.",
-        why_this_role: "This role ensures the generated team reflects real user value instead of only system output.",
-        routing_hints: { good_for: ["User needs", "Flow design", "Problem framing"], avoid_for: ["Release planning", "Backend architecture"], pairs_well_with: ["PM", "Engineer"] },
-        display_order: 2,
-      },
-      {
-        name: "David Wu",
-        role_type: "Engineer",
-        custom_role_label: null,
-        is_custom_role: false,
-        background_identity: "Product-minded engineer who evaluates technical feasibility and translates plans into buildable systems.",
-        tasks: ["Identify technical constraints", "Suggest implementation paths", "Reduce delivery risk"],
-        knowledge: ["System design", "API integration", "Frontend-backend collaboration"],
-        rules: "Keep recommendations feasible, incremental, and implementation-aware.",
-        workflow: "Responds after PM and UX framing to turn direction into practical execution options.",
-        response_format: "Implementation notes, technical tradeoffs, and delivery suggestions.",
-        tone: "Direct, practical, and solution-focused.",
-        why_this_role: "This role grounds the team in technical reality and helps the project move beyond abstract planning.",
-        routing_hints: { good_for: ["Technical feasibility", "Architecture tradeoffs", "Implementation sequencing"], avoid_for: ["Pure brand positioning", "Standalone user research synthesis"], pairs_well_with: ["PM", "UX"] },
-        display_order: 3,
+        role: "user",
+        content: [
+          {
+            type: "input_text",
+            text: JSON.stringify(
+              {
+                project_summary: input.project_summary,
+                problem_statement: input.problem_statement,
+                target_users: input.target_users,
+                core_goals: input.core_goals,
+                constraints: input.constraints,
+                open_questions: input.open_questions,
+                project_stage: input.project_stage,
+              },
+              null,
+              2
+            ),
+          },
+        ],
       },
     ],
-  };
+    text: {
+      format: zodTextFormat(teamComposerSchema, "team_composer_result"),
+    },
+  });
+
+  const parsed = response.output_parsed;
+
+  if (!parsed) {
+    throw new TeamGenerationRouteError("Team Composer returned no structured output", 500);
+  }
+
+  return parsed satisfies TeamComposerResult;
 }
 
 async function listExistingTeamMembers(projectId: string) {

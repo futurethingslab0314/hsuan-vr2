@@ -1,5 +1,8 @@
 ﻿import { NextResponse } from "next/server";
+import { z } from "zod";
+import { zodTextFormat } from "openai/helpers/zod";
 import { notion, getNotionDatabaseId } from "@/src/lib/notion";
+import { openai } from "@/src/lib/openai";
 
 type DbProperty = {
   id?: string;
@@ -64,6 +67,11 @@ type ReportGeneratorResult = {
   report_title: string;
   report_content: string;
 };
+
+const reportGeneratorSchema = z.object({
+  report_title: z.string(),
+  report_content: z.string(),
+});
 
 class ReportGenerationRouteError extends Error {
   statusCode: number;
@@ -218,56 +226,50 @@ function buildReportGeneratorInput(projectData: ProjectForReport, members: TeamM
 }
 
 async function runReportGenerator(input: ReportGeneratorInput): Promise<ReportGeneratorResult> {
-  const roleSummary = input.final_members.map((member) => `${member.role_type_ai}: ${member.member_name}`).join(", ");
-  const targetUsers = input.analysis_result.target_users.length > 0 ? input.analysis_result.target_users.join("; ") : "待進一步確認";
-  const coreGoals = input.analysis_result.core_goals.length > 0 ? input.analysis_result.core_goals.join("; ") : "待補充";
-  const constraints = input.analysis_result.constraints.length > 0 ? input.analysis_result.constraints.join("; ") : "尚未明確";
-  const openQuestions = input.analysis_result.open_questions.length > 0 ? input.analysis_result.open_questions.join("; ") : "目前無";
-  const stageLabels: Record<string, string> = {
-    discover: "Discover",
-    define: "Define",
-    develop: "Develop",
-    deliver: "Deliver",
-  };
-  const stageLabel = stageLabels[input.project_stage] ?? input.project_stage;
+  const response = await openai.responses.parse({
+    model: "gpt-4o-2024-08-06",
+    input: [
+      {
+        role: "system",
+        content: [
+          {
+            type: "input_text",
+            text: [
+              "You are Report Generator for AI Team Builder.",
+              "Your job is to create a concise one-page product strategy report.",
+              "Return only valid structured output.",
+              "The report must be readable as plain text.",
+              "The report content should be structured with clear section headings.",
+              "Focus on summary, decisions, assumptions, and next steps.",
+              "Do not repeat the entire chat transcript verbatim.",
+              "If information is uncertain, label it as assumption or open question.",
+              "Project stages are: discover, define, develop, deliver.",
+            ].join("\n"),
+          },
+        ],
+      },
+      {
+        role: "user",
+        content: [
+          {
+            type: "input_text",
+            text: JSON.stringify(input, null, 2),
+          },
+        ],
+      },
+    ],
+    text: {
+      format: zodTextFormat(reportGeneratorSchema, "report_generator_result"),
+    },
+  });
 
-  return {
-    report_title: `${stageLabel} Strategy Summary`,
-    report_content: [
-      "Executive Summary",
-      `${input.analysis_result.project_summary}`,
-      "",
-      "Core Need",
-      `${input.project_goal || input.original_prompt}`,
-      "",
-      "User Problem",
-      `${input.analysis_result.problem_statement}`,
-      "",
-      "Product Direction",
-      `Current phase: ${stageLabel}. Team composition: ${roleSummary}. Core goals: ${coreGoals}.`,
-      "",
-      "Target Users",
-      `${targetUsers}`,
-      "",
-      "Constraints",
-      `${constraints}`,
-      "",
-      "Key Assumptions",
-      `${input.decision_points.assumptions || "需要更多對話驗證假設"}`,
-      "",
-      "Confirmed Points",
-      `${input.decision_points.confirmed_points || "尚未形成穩定共識"}`,
-      "",
-      "Open Questions",
-      `${openQuestions}`,
-      "",
-      "Next Steps",
-      `${input.decision_points.next_focus || "釐清下一輪產品方向與範圍"}`,
-      "",
-      "Conversation Snapshot",
-      `${input.chat_summary}`,
-    ].join("\n"),
-  };
+  const parsed = response.output_parsed;
+
+  if (!parsed) {
+    throw new ReportGenerationRouteError("Report Generator returned no structured output", 500);
+  }
+
+  return parsed satisfies ReportGeneratorResult;
 }
 
 async function buildReportNumber(): Promise<string> {
@@ -349,6 +351,3 @@ export async function POST(_request: Request, context: { params: Promise<{ proje
     return handleReportRouteError(error);
   }
 }
-
-
-
