@@ -295,6 +295,23 @@ function buildTeamMemberCreatePayload(projectId: string, member: TeamComposerMem
   return payload;
 }
 
+function mapCreatedMemberResponse(pageId: string, member: TeamComposerMember) {
+  return {
+    member_id: pageId,
+    member_name: member.name,
+    role_type_ai: member.role_type,
+    is_custom_role: member.is_custom_role,
+    role_background_identity: member.background_identity,
+    role_target: joinLines(member.tasks),
+    role_knowledge_reference: joinLines(member.knowledge),
+    role_rules: member.rules,
+    role_workflow: member.workflow,
+    role_response_format: member.response_format,
+    role_tone: member.tone,
+    display_order: member.display_order,
+  };
+}
+
 async function createTeamMembers(projectId: string, members: TeamComposerMember[]) {
   const databaseId = getNotionDatabaseId("teamMembers");
   const createdMembers = [];
@@ -305,12 +322,7 @@ async function createTeamMembers(projectId: string, members: TeamComposerMember[
       properties: buildTeamMemberCreatePayload(projectId, member),
     });
 
-    createdMembers.push({
-      member_id: page.id,
-      member_name: member.name,
-      role_type_ai: member.role_type,
-      is_custom_role: member.is_custom_role,
-    });
+    createdMembers.push(mapCreatedMemberResponse(page.id, member));
   }
 
   return createdMembers;
@@ -347,6 +359,3 @@ export async function POST(request: Request, context: { params: Promise<{ projec
     return handleTeamGenerationRouteError(error);
   }
 }
-
-
-

@@ -2,7 +2,7 @@
 
 import React, { useState, useRef } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Home } from 'lucide-react';
+import { Home, X } from 'lucide-react';
 import { TeamMember } from './types';
 import { DEFAULT_MEMBERS } from './constants';
 import { PROJECT_STAGE_VALUES } from './constants/projectStages';
@@ -26,6 +26,14 @@ type GeneratedMember = {
   member_name: string;
   role_type_ai: string;
   is_custom_role: boolean;
+  role_background_identity: string;
+  role_target: string;
+  role_knowledge_reference: string;
+  role_rules: string;
+  role_workflow: string;
+  role_response_format: string;
+  role_tone: string;
+  display_order?: number;
 };
 
 type GeneratedReport = {
@@ -35,21 +43,19 @@ type GeneratedReport = {
 };
 
 function buildProjectSeed({
+  username,
   projectRequirements,
   designGoals,
   currentPhase,
 }: {
+  username: string;
   projectRequirements: string;
   designGoals: string;
   currentPhase: string;
 }) {
-  const trimmedRequirements = projectRequirements.trim();
-  const collapsed = trimmedRequirements.replace(/\s+/g, ' ');
-  const shortTitle = collapsed.slice(0, 60);
-
   return {
-    project: shortTitle || 'Untitled Project',
-    input_prompt_user: trimmedRequirements,
+    project: username.trim(),
+    input_prompt_user: projectRequirements.trim(),
     input_prompt_goal_user: designGoals.trim(),
     currentstage_user: currentPhase,
     status: 'draft',
@@ -63,12 +69,13 @@ function mapGeneratedMembersToUi(members: GeneratedMember[]): TeamMember[] {
       id: member.member_id,
       name: member.member_name,
       role: member.role_type_ai,
-      background: fallback.background,
-      tasks: fallback.tasks,
-      knowledge: fallback.knowledge,
-      workflow: fallback.workflow,
-      responseFormat: fallback.responseFormat,
-      tone: fallback.tone,
+      roleBackgroundIdentity: member.role_background_identity || fallback.roleBackgroundIdentity,
+      roleTarget: member.role_target || fallback.roleTarget,
+      roleKnowledgeReference: member.role_knowledge_reference || fallback.roleKnowledgeReference,
+      roleRules: member.role_rules || fallback.roleRules,
+      roleWorkflow: member.role_workflow || fallback.roleWorkflow,
+      roleResponseFormat: member.role_response_format || fallback.roleResponseFormat,
+      roleTone: member.role_tone || fallback.roleTone,
       position: fallback.position,
     };
   });
@@ -95,6 +102,9 @@ export default function App() {
   const [isCreatingProject, setIsCreatingProject] = useState(false);
   const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
   const [report, setReport] = useState<GeneratedReport | null>(null);
+  const [isSignInModalOpen, setIsSignInModalOpen] = useState(false);
+  const [username, setUsername] = useState('');
+  const [tempUsername, setTempUsername] = useState('');
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const handleAddMemberToInput = (name: string) => {
@@ -198,7 +208,20 @@ export default function App() {
     setTempMember(member ? { ...member } : null);
   };
 
+  const handleSignIn = () => {
+    if (tempUsername.trim()) {
+      setUsername(tempUsername.trim());
+      setIsSignInModalOpen(false);
+    }
+  };
+
   const handleStartAnalysis = async () => {
+    if (!username.trim()) {
+      setTempUsername(username);
+      setIsSignInModalOpen(true);
+      return;
+    }
+
     if (
       !projectRequirements.trim() ||
       !designGoals.trim() ||
@@ -214,6 +237,7 @@ export default function App() {
 
     try {
       const createPayload = buildProjectSeed({
+        username,
         projectRequirements,
         designGoals,
         currentPhase,
@@ -264,11 +288,36 @@ export default function App() {
     }
   };
 
-  const handleSaveMember = () => {
-    if (!tempMember) return;
-    setMembers((prev) => prev.map((m) => (m.id === tempMember.id ? tempMember : m)));
-    setSelectedMemberId(null);
-    setTempMember(null);
+  const handleSaveMember = async () => {
+    if (!tempMember || !projectId) return;
+
+    try {
+      const response = await fetch(`/api/projects/${projectId}/team-members/${tempMember.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          roleBackgroundIdentity: tempMember.roleBackgroundIdentity,
+          roleTarget: tempMember.roleTarget,
+          roleKnowledgeReference: tempMember.roleKnowledgeReference,
+          roleRules: tempMember.roleRules,
+          roleWorkflow: tempMember.roleWorkflow,
+          roleResponseFormat: tempMember.roleResponseFormat,
+          roleTone: tempMember.roleTone,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data?.ok) {
+        throw new Error(data?.detail || data?.error || 'Failed to save team member');
+      }
+
+      setMembers((prev) => prev.map((m) => (m.id === tempMember.id ? tempMember : m)));
+      setSelectedMemberId(null);
+      setTempMember(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      alert(`儲存角色失敗: ${message}`);
+    }
   };
 
   return (
@@ -279,7 +328,23 @@ export default function App() {
           <div className="w-10 h-10 bg-transparent text-black border border-black/20 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform"><Home size={20} /></div>
           <span className="opacity-0 group-hover:opacity-100 transition-opacity duration-300">Home</span>
         </div>
-        <AnimatePresence>{view === 'home' && (<motion.button key="signin" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} className="px-8 py-3 bg-black text-white rounded-full text-base font-medium hover:scale-105 transition-transform shadow-lg">Sign in</motion.button>)}</AnimatePresence>
+        <AnimatePresence>
+          {view === 'home' && (
+            <motion.button
+              key="signin"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 20 }}
+              onClick={() => {
+                setTempUsername(username);
+                setIsSignInModalOpen(true);
+              }}
+              className="px-8 py-3 bg-black text-white rounded-full text-base font-medium hover:scale-105 transition-transform shadow-lg"
+            >
+              {username ? `Hi, ${username}` : 'Sign in'}
+            </motion.button>
+          )}
+        </AnimatePresence>
       </nav>
       <AnimatePresence mode="wait">
         {view === 'home' && <HomeView projectRequirements={projectRequirements} setProjectRequirements={setProjectRequirements} designGoals={designGoals} setDesignGoals={setDesignGoals} currentPhase={currentPhase} setCurrentPhase={setCurrentPhase} isFocused={isFocused} setIsFocused={setIsFocused} handleStartAnalysis={handleStartAnalysis} />}
@@ -287,6 +352,62 @@ export default function App() {
         {view === 'map' && <MapView members={members} selectedMemberId={selectedMemberId} setSelectedMemberId={handleSelectMember} tempMember={tempMember} setTempMember={setTempMember} handleSaveMember={handleSaveMember} inputValue={projectRequirements} setView={(nextView) => setView(nextView)} />}
         {view === 'chat' && <ChatView messages={messages} members={members} chatInput={chatInput} setChatInput={setChatInput} handleSendMessage={handleSendMessage} handleAddMemberToInput={handleAddMemberToInput} setView={setView} handleGeneratePlan={handleGeneratePlan} isGeneratingPlan={isGeneratingPlan} inputValue={projectRequirements} chatEndRef={chatEndRef} />}
         {view === 'plan' && <PlanView setView={(nextView) => setView(nextView)} reportNumber={report?.report_number ?? null} reportContent={report?.report_content ?? null} isGeneratingPlan={isGeneratingPlan} />}
+      </AnimatePresence>
+      <AnimatePresence>
+        {isSignInModalOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsSignInModalOpen(false)}
+              className="absolute inset-0 bg-black/20 backdrop-blur-md"
+            />
+
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-md glass p-10 rounded-[40px] shadow-2xl space-y-8"
+            >
+              <div className="text-center space-y-2">
+                <h2 className="text-3xl font-display font-bold tracking-tight">Welcome Back</h2>
+                <p className="text-[#86868B] text-sm">Please enter your name to personalize your workspace.</p>
+              </div>
+
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-[#86868B] ml-4">
+                    Username
+                  </label>
+                  <input
+                    type="text"
+                    autoFocus
+                    value={tempUsername}
+                    onChange={(e) => setTempUsername(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSignIn()}
+                    placeholder="Enter your name..."
+                    className="w-full bg-black/5 border border-black/5 rounded-2xl px-6 py-4 outline-none focus:ring-2 ring-black/5 transition-all"
+                  />
+                </div>
+
+                <button
+                  onClick={handleSignIn}
+                  className="w-full py-4 bg-black text-white rounded-2xl font-bold hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl"
+                >
+                  Continue
+                </button>
+              </div>
+
+              <button
+                onClick={() => setIsSignInModalOpen(false)}
+                className="absolute top-6 right-6 w-8 h-8 flex items-center justify-center rounded-full hover:bg-black/5 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </motion.div>
+          </div>
+        )}
       </AnimatePresence>
       <CustomCursor currentView={view} />
       {projectId && <span className="hidden">project:{projectId}</span>}

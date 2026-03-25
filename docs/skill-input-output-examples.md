@@ -8,7 +8,7 @@
 {
   "original_prompt": "我想做一個讓產品經理、設計師和工程師可以一起跟 AI 討論產品需求的工具，使用者可以先描述專案需求，AI 會組出一個團隊一起開會，最後整理成一份產品策略摘要。",
   "project_goal": "先做出第一版可以驗證這種 AI 團隊協作體驗是否有價值",
-  "project_stage": "mvp_planning",
+  "project_stage": "define",
   "optional_context": "目標使用者是小型產品團隊與接案設計團隊"
 }
 ```
@@ -110,7 +110,7 @@
       "priority": "medium"
     }
   ],
-  "project_stage": "mvp_planning"
+  "project_stage": "define"
 }
 ```
 
@@ -230,7 +230,7 @@
     "project_summary": "一個讓產品團隊透過 AI 團隊協作方式釐清需求並產出產品策略摘要的工具。",
     "problem_statement": "小型團隊缺乏多職能視角協作與整理結論的工具。"
   },
-  "project_stage": "mvp_planning",
+  "project_stage": "define",
   "members": [
     {
       "id": "pm-1",
@@ -348,7 +348,7 @@
 {
   "original_prompt": "我想做一個讓產品經理、設計師和工程師可以一起跟 AI 討論產品需求的工具。",
   "project_goal": "驗證 AI 團隊協作體驗是否有價值",
-  "project_stage": "mvp_planning",
+  "project_stage": "define",
   "analysis_result": {
     "problem_statement": "小型團隊缺乏多職能視角協作與整理結論的工具。",
     "target_users": ["小型產品團隊", "接案設計團隊"]
@@ -373,7 +373,7 @@
 {
   "report_title": "AI Team Collaboration Tool MVP Strategy Summary",
   "report_type": "one_page_product_strategy",
-  "project_stage": "mvp_planning",
+  "project_stage": "define",
   "executive_summary": "本專案的第一階段應聚焦驗證 AI 團隊協作體驗是否能幫助小型產品與設計團隊更快收斂需求。MVP 不應一開始投入過多成本在完整多人角色切換，而應優先保留多視角回應與討論整理的核心價值。",
   "sections": [
     {
@@ -423,3 +423,4 @@
 3. `Team Composer` 根據 brief 產生團隊角色
 4. `Conversation Orchestrator` 根據對話內容動態選角與更新狀態
 5. `Report Generator` 把分析結果與對話結論整理成一頁式摘要
+

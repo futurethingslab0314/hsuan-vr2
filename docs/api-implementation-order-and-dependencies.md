@@ -29,6 +29,12 @@
 - 先打通前段主流程，比先做最複雜的 chat / report 更穩
 
 ## 3. 依賴關係總覽
+`PROJECT.currentstage_user` 的正式 enum 為：
+
+- `discover`
+- `define`
+- `develop`
+- `deliver`
 
 ### 3.1 `POST /api/projects/create`
 
@@ -278,4 +284,8 @@
 4. 確認首頁 -> 分析 -> 團隊頁主流程跑通
 5. 再進入 `chat`
 6. 最後做 `report/generate`
+
+
+
+
 

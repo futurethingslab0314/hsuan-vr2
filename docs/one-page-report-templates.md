@@ -20,7 +20,7 @@
 - 後續 AI 輸出較容易控制
 - 雖然格式一致，但內容焦點可隨階段改變
 
-## 2. `concept` 階段報告模板
+## 2. `discover` 階段報告模板
 
 定位：幫使用者把模糊想法整理成值得繼續驗證的產品方向。
 
@@ -87,7 +87,7 @@
 - 偏假設整理
 - 不要過度像 PRD
 
-## 3. `mvp_planning` 階段報告模板
+## 3. `define` 階段報告模板
 
 定位：幫使用者把方向收斂成第一版可執行的產品範圍。
 
@@ -153,7 +153,7 @@
 - 偏優先級與範圍
 - 偏決策支援
 
-## 4. `design_refinement` 階段報告模板
+## 4. `develop` 階段報告模板
 
 定位：幫使用者把已明確的方向，進一步整理成體驗與介面層的設計策略。
 
@@ -219,7 +219,7 @@
 - 偏流程與互動
 - 不要變成純視覺評論
 
-## 5. `execution_planning` 階段報告模板
+## 5. `deliver` 階段報告模板
 
 定位：幫使用者從「已經有方向」轉進「下一步怎麼執行」。
 
@@ -287,32 +287,32 @@
 
 ## 6. 四種模板的差異總結
 
-- `concept`：整理問題與假設
-- `mvp_planning`：收斂範圍與優先級
-- `design_refinement`：優化流程與互動
-- `execution_planning`：整理落地與行動
+- `discover`：探索問題、脈絡與假設
+- `define`：定義方向、範圍與決策重點
+- `develop`：發展方案、流程與互動設計
+- `deliver`：整理交付、落地與後續行動
 
 ## 7. 給 Report Generator 的模板切換規則
 
-### 當 `project_stage = concept`
+### 當 `project_stage = discover`
 
 - 強化 `Core Need`、`User Problem`、`Key Assumptions`
 - 弱化具體功能細節
 - `Next Steps` 偏驗證與釐清
 
-### 當 `project_stage = mvp_planning`
+### 當 `project_stage = define`
 
 - 強化 `Product Direction`、`Next Steps`
 - `Core Need` 更貼近第一版目標
 - `Key Assumptions` 偏功能取捨與可行性
 
-### 當 `project_stage = design_refinement`
+### 當 `project_stage = develop`
 
 - 強化 `User Problem`、`Product Direction`
 - `Product Direction` 內包含流程與介面策略
 - `Key Assumptions` 偏體驗與互動假設
 
-### 當 `project_stage = execution_planning`
+### 當 `project_stage = deliver`
 
 - 強化 `Next Steps`、`Key Assumptions`
 - `Product Direction` 偏執行順序與依賴
@@ -328,3 +328,5 @@ v1 先不要讓報告長得差太多，建議：
 - 每段字數控制中短
 
 這樣比較符合「輔助型產出」，也不會搶走產品真正的主角，也就是會議互動體驗。
+
+

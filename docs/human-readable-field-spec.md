@@ -135,38 +135,12 @@
 - 型態：布林值
 - 必填：是
 
-### `background`
+### `background_identity`
 
-- 用途：角色背景設定
-- 型態：物件
+- 用途：角色背景、身分與專長描述
+- 型態：文字
 - 必填：是
-- 備註：可細分年資、經驗、職能、專長
-
-建議子欄位：
-
-#### `years`
-
-- 用途：年資
-- 型態：文字
-- 必填：否
-
-#### `experience`
-
-- 用途：過往經驗
-- 型態：文字
-- 必填：否
-
-#### `profession`
-
-- 用途：職能定位
-- 型態：文字
-- 必填：否
-
-#### `expertise`
-
-- 用途：專長領域
-- 型態：文字陣列
-- 必填：否
+- 備註：目前後端寫入 `TEAM_MEMBER.role_background_identity`，前端也以單一文字欄位 `roleBackgroundIdentity` 顯示與編輯
 
 ### `tasks`
 
@@ -229,6 +203,30 @@
 
 - 用途：適合和哪些角色搭配
 - 型態：文字陣列
+
+### 前端 `TeamMember` 顯示 / 編輯模型
+
+目前前端 [`src/types.ts`](C:/Users/User/Documents/Playground/ai-team-builder/src/types.ts) 與 [`src/components/views/MapView.tsx`](C:/Users/User/Documents/Playground/ai-team-builder/src/components/views/MapView.tsx) 使用的是扁平化欄位模型，不再使用舊的 `background.years / tasks / knowledge` UI 結構。
+
+目前前端 `TeamMember` 以以下欄位為主：
+
+- `roleBackgroundIdentity`
+- `roleTarget`
+- `roleKnowledgeReference`
+- `roleRules`
+- `roleWorkflow`
+- `roleResponseFormat`
+- `roleTone`
+
+其中對應到 Notion 的欄位為：
+
+- `roleBackgroundIdentity` -> `role_background_identity`
+- `roleTarget` -> `role_target`
+- `roleKnowledgeReference` -> `role_knowledge_reference`
+- `roleRules` -> `role_rules`
+- `roleWorkflow` -> `role_workflow`
+- `roleResponseFormat` -> `role_response_format`
+- `roleTone` -> `role_tone`
 
 ## 3. Conversation Orchestrator 欄位規格
 

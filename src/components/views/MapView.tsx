@@ -1,4 +1,4 @@
-import { motion, AnimatePresence } from 'motion/react';
+﻿import { motion, AnimatePresence } from 'motion/react';
 import { User, ChevronRight, X, Briefcase, Activity, BookOpen, FileText, MessageSquare, Save } from 'lucide-react';
 import { TeamMember } from '../../types';
 import { RelationshipLines } from '../RelationshipLines';
@@ -9,7 +9,7 @@ interface MapViewProps {
   setSelectedMemberId: (id: string | null) => void;
   tempMember: TeamMember | null;
   setTempMember: (member: TeamMember | null) => void;
-  handleSaveMember: () => void;
+  handleSaveMember: () => void | Promise<void>;
   inputValue: string;
   setView: (view: 'chat') => void;
 }
@@ -65,7 +65,7 @@ export const MapView = ({
                   <div className="h-full bg-black/20 w-3/4"></div>
                 </div>
                 <p className="text-[10px] text-[#86868B] line-clamp-2 leading-relaxed">
-                  {member.tasks}
+                  {member.roleTarget}
                 </p>
               </div>
             </div>
@@ -133,96 +133,78 @@ export const MapView = ({
               <div className="flex-1 overflow-y-auto p-8 space-y-8 scrollbar-hide">
                 <section className="space-y-4">
                   <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-white/40">
-                    <Briefcase size={14} /> Identity & Background
+                    <Briefcase size={14} /> Role Background Identity
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                      <label className="text-[10px] text-white/40 uppercase">Years</label>
-                      <input 
-                        className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none focus:border-white/30"
-                        value={tempMember.background.years}
-                        onChange={e => setTempMember({...tempMember, background: {...tempMember.background, years: e.target.value}})}
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] text-white/40 uppercase">Profession</label>
-                      <input 
-                        className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none focus:border-white/30"
-                        value={tempMember.background.profession}
-                        onChange={e => setTempMember({...tempMember, background: {...tempMember.background, profession: e.target.value}})}
-                      />
-                    </div>
-                    <div className="col-span-2 space-y-1">
-                      <label className="text-[10px] text-white/40 uppercase">Experience</label>
-                      <input 
-                        className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none focus:border-white/30"
-                        value={tempMember.background.experience}
-                        onChange={e => setTempMember({...tempMember, background: {...tempMember.background, experience: e.target.value}})}
-                      />
-                    </div>
-                    <div className="col-span-2 space-y-1">
-                      <label className="text-[10px] text-white/40 uppercase">Expertise</label>
-                      <input 
-                        className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none focus:border-white/30"
-                        value={tempMember.background.expertise}
-                        onChange={e => setTempMember({...tempMember, background: {...tempMember.background, expertise: e.target.value}})}
-                      />
-                    </div>
-                  </div>
-                </section>
-
-                <section className="space-y-2">
-                  <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-white/40">
-                    <Activity size={14} /> Role Tasks
-                  </div>
-                  <textarea 
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:border-white/30 min-h-[80px] resize-none"
-                    value={tempMember.tasks}
-                    onChange={e => setTempMember({...tempMember, tasks: e.target.value})}
+                  <textarea
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:border-white/30 min-h-[100px] resize-none"
+                    value={tempMember.roleBackgroundIdentity}
+                    onChange={e => setTempMember({ ...tempMember, roleBackgroundIdentity: e.target.value })}
                   />
                 </section>
 
                 <section className="space-y-2">
                   <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-white/40">
-                    <BookOpen size={14} /> Knowledge & Standards
+                    <Activity size={14} /> Role Target
                   </div>
-                  <textarea 
+                  <textarea
                     className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:border-white/30 min-h-[80px] resize-none"
-                    value={tempMember.knowledge}
-                    onChange={e => setTempMember({...tempMember, knowledge: e.target.value})}
+                    value={tempMember.roleTarget}
+                    onChange={e => setTempMember({ ...tempMember, roleTarget: e.target.value })}
                   />
                 </section>
 
                 <section className="space-y-2">
                   <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-white/40">
-                    <ChevronRight size={14} /> Workflow
+                    <BookOpen size={14} /> Role Knowledge Reference
                   </div>
-                  <textarea 
+                  <textarea
                     className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:border-white/30 min-h-[80px] resize-none"
-                    value={tempMember.workflow}
-                    onChange={e => setTempMember({...tempMember, workflow: e.target.value})}
+                    value={tempMember.roleKnowledgeReference}
+                    onChange={e => setTempMember({ ...tempMember, roleKnowledgeReference: e.target.value })}
                   />
                 </section>
 
                 <section className="space-y-2">
                   <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-white/40">
-                    <FileText size={14} /> Response Format
+                    <FileText size={14} /> Role Rules
                   </div>
-                  <textarea 
+                  <textarea
                     className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:border-white/30 min-h-[80px] resize-none"
-                    value={tempMember.responseFormat}
-                    onChange={e => setTempMember({...tempMember, responseFormat: e.target.value})}
+                    value={tempMember.roleRules}
+                    onChange={e => setTempMember({ ...tempMember, roleRules: e.target.value })}
+                  />
+                </section>
+
+                <section className="space-y-2">
+                  <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-white/40">
+                    <ChevronRight size={14} /> Role Workflow
+                  </div>
+                  <textarea
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:border-white/30 min-h-[80px] resize-none"
+                    value={tempMember.roleWorkflow}
+                    onChange={e => setTempMember({ ...tempMember, roleWorkflow: e.target.value })}
+                  />
+                </section>
+
+                <section className="space-y-2">
+                  <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-white/40">
+                    <FileText size={14} /> Role Response Format
+                  </div>
+                  <textarea
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:border-white/30 min-h-[80px] resize-none"
+                    value={tempMember.roleResponseFormat}
+                    onChange={e => setTempMember({ ...tempMember, roleResponseFormat: e.target.value })}
                   />
                 </section>
 
                 <section className="space-y-2 pb-12">
                   <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-white/40">
-                    <MessageSquare size={14} /> Tone & Style
+                    <MessageSquare size={14} /> Role Tone
                   </div>
-                  <input 
+                  <input
                     className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:border-white/30"
-                    value={tempMember.tone}
-                    onChange={e => setTempMember({...tempMember, tone: e.target.value})}
+                    value={tempMember.roleTone}
+                    onChange={e => setTempMember({ ...tempMember, roleTone: e.target.value })}
                   />
                 </section>
               </div>

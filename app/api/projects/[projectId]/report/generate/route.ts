@@ -75,32 +75,11 @@ class ReportGenerationRouteError extends Error {
   }
 }
 
-function normalize(value: string): string {
-  return value.trim().toLowerCase().replace(/[\s-]+/g, "_");
-}
-
 function splitLines(value: string): string[] {
   return value
     .split("\n")
     .map((item) => item.trim())
     .filter(Boolean);
-}
-
-function findPropertyName(properties: Record<string, DbProperty>, candidates: string[], expectedType?: string): string | undefined {
-  const normalizedCandidates = new Set(candidates.map(normalize));
-  const exactMatch = Object.entries(properties).find(([name, prop]) => {
-    const typeMatches = expectedType ? prop.type === expectedType : true;
-    return typeMatches && normalizedCandidates.has(normalize(name));
-  });
-  if (exactMatch) return exactMatch[0];
-
-  const partialMatch = Object.entries(properties).find(([name, prop]) => {
-    const typeMatches = expectedType ? prop.type === expectedType : true;
-    const normalizedName = normalize(name);
-    return typeMatches && Array.from(normalizedCandidates).some((candidate) => normalizedName.includes(candidate));
-  });
-
-  return partialMatch?.[0];
 }
 
 function getRichTextValue(properties: Record<string, DbProperty>, propertyName: string | undefined): string {
@@ -150,54 +129,43 @@ function extractProjectForReport(projectPage: Awaited<ReturnType<typeof notion.p
   }
 
   const properties = projectPage.properties as Record<string, DbProperty>;
-  const projectPropertyName = findPropertyName(properties, ["project"], "title") ?? findPropertyName(properties, ["project"], "rich_text");
 
   return {
-    project: getTitleValue(properties, projectPropertyName) || getRichTextValue(properties, projectPropertyName),
-    input_prompt_user: getRichTextValue(properties, findPropertyName(properties, ["input_prompt_user"], "rich_text")),
-    input_prompt_goal_user: getRichTextValue(properties, findPropertyName(properties, ["input_prompt_goal_user"], "rich_text")),
-    currentstage_user: getSelectValue(properties, findPropertyName(properties, ["currentstage_user"], "select")),
-    project_summary_ai: getRichTextValue(properties, findPropertyName(properties, ["project_summary_ai"], "rich_text")),
-    problem_statement_ai: getRichTextValue(properties, findPropertyName(properties, ["problem_statement_ai"], "rich_text")),
-    target_users_ai: getRichTextValue(properties, findPropertyName(properties, ["target_users_ai"], "rich_text")),
-    core_goals_ai: getRichTextValue(properties, findPropertyName(properties, ["core_goals_ai"], "rich_text")),
-    constraints_ai: getRichTextValue(properties, findPropertyName(properties, ["constraints_ai"], "rich_text")),
-    open_questions_ai: getRichTextValue(properties, findPropertyName(properties, ["open_questions_ai"], "rich_text")),
-    chat_content: getRichTextValue(properties, findPropertyName(properties, ["chat_content"], "rich_text")),
-    discussion_stage_ai: getSelectValue(properties, findPropertyName(properties, ["discussion_stage_ai"], "select")),
-    confirmed_points_ai: getRichTextValue(properties, findPropertyName(properties, ["confirmed_points_ai"], "rich_text")),
-    assumptions_ai: getRichTextValue(properties, findPropertyName(properties, ["assumptions_ai"], "rich_text")),
-    next_focus_ai: getRichTextValue(properties, findPropertyName(properties, ["next_focus_ai"], "rich_text")),
-    ready_for_report_ai: getCheckboxValue(properties, findPropertyName(properties, ["ready_for_report_ai"], "checkbox")),
+    project: getTitleValue(properties, "project"),
+    input_prompt_user: getRichTextValue(properties, "input_prompt_user"),
+    input_prompt_goal_user: getRichTextValue(properties, "input_prompt_goal_user"),
+    currentstage_user: getSelectValue(properties, "currentstage_user"),
+    project_summary_ai: getRichTextValue(properties, "project_summary_ai"),
+    problem_statement_ai: getRichTextValue(properties, "problem_statement_ai"),
+    target_users_ai: getRichTextValue(properties, "target_users_ai"),
+    core_goals_ai: getRichTextValue(properties, "core_goals_ai"),
+    constraints_ai: getRichTextValue(properties, "constraints_ai"),
+    open_questions_ai: getRichTextValue(properties, "open_questions_ai"),
+    chat_content: getRichTextValue(properties, "chat_content"),
+    discussion_stage_ai: getSelectValue(properties, "discussion_stage_ai"),
+    confirmed_points_ai: getRichTextValue(properties, "confirmed_points_ai"),
+    assumptions_ai: getRichTextValue(properties, "assumptions_ai"),
+    next_focus_ai: getRichTextValue(properties, "next_focus_ai"),
+    ready_for_report_ai: getCheckboxValue(properties, "ready_for_report_ai"),
   };
 }
 
 async function listTeamMembersByProject(projectId: string) {
   const databaseId = getNotionDatabaseId("teamMembers");
   const db = await notion.databases.retrieve({ database_id: databaseId });
-  if (!("properties" in db) || !("data_sources" in db) || !db.data_sources?.length) {
+  if (!("data_sources" in db) || !db.data_sources?.length) {
     throw new ReportGenerationRouteError("TEAM_MEMBER database metadata is incomplete", 500);
-  }
-
-  const properties = db.properties as Record<string, DbProperty>;
-  const relationPropertyName = findPropertyName(properties, ["project"], "relation");
-  if (!relationPropertyName) {
-    throw new ReportGenerationRouteError("TEAM_MEMBER database is missing project relation", 500);
   }
 
   const queryArgs: Parameters<typeof notion.dataSources.query>[0] = {
     data_source_id: db.data_sources[0].id,
     filter: {
-      property: relationPropertyName,
+      property: "project",
       relation: { contains: projectId },
     },
+    sorts: [{ property: "display_order", direction: "ascending" }],
     page_size: 20,
   };
-
-  const displayOrderPropertyName = findPropertyName(properties, ["display_order"], "number");
-  if (displayOrderPropertyName) {
-    queryArgs.sorts = [{ property: displayOrderPropertyName, direction: "ascending" }];
-  }
 
   const result = await notion.dataSources.query(queryArgs);
   return result.results;
@@ -208,20 +176,15 @@ function extractTeamMembersForReport(teamMemberPages: Array<Awaited<ReturnType<t
     .filter((page): page is Extract<typeof page, { properties: Record<string, DbProperty> }> => "properties" in page)
     .map((page) => {
       const properties = page.properties as Record<string, DbProperty>;
-      const memberNamePropertyName = findPropertyName(properties, ["member_name"], "title") ?? findPropertyName(properties, ["member_name"], "rich_text");
       return {
-        member_name: getTitleValue(properties, memberNamePropertyName) || getRichTextValue(properties, memberNamePropertyName),
-        role_type_ai: getSelectValue(properties, findPropertyName(properties, ["role_type_ai"], "select")),
-        why_this_role: getRichTextValue(properties, findPropertyName(properties, ["why_this_role"], "rich_text")),
+        member_name: getTitleValue(properties, "member_name"),
+        role_type_ai: getSelectValue(properties, "role_type_ai"),
+        why_this_role: getRichTextValue(properties, "why_this_role"),
       };
     });
 }
 
 function validateProjectForReport(projectData: ProjectForReport, members: TeamMemberForReport[]) {
-  if (!projectData.ready_for_report_ai) {
-    throw new ReportGenerationRouteError("Project is not ready for report generation", 400);
-  }
-
   if (!projectData.project_summary_ai || !projectData.problem_statement_ai || !projectData.chat_content) {
     throw new ReportGenerationRouteError("Project is missing required data for report generation", 400);
   }
@@ -325,23 +288,12 @@ async function buildReportNumber(): Promise<string> {
 
 async function createReport(projectId: string, reportResult: ReportGeneratorResult) {
   const databaseId = getNotionDatabaseId("reportSections");
-  const db = await notion.databases.retrieve({ database_id: databaseId });
-  if (!("properties" in db)) {
-    throw new ReportGenerationRouteError("REPORT database response is missing properties", 500);
-  }
-
-  const properties = db.properties as Record<string, DbProperty>;
-  const pageProperties: NotionCreatePageProperties = {};
-  const titlePropertyName = Object.entries(properties).find(([, prop]) => prop.type === "title")?.[0];
-  const reportNumberPropertyName = findPropertyName(properties, ["report_number"], "title") ?? findPropertyName(properties, ["report_number"], "rich_text");
-  const reportContentPropertyName = findPropertyName(properties, ["report_content"], "rich_text");
-  const projectRelationPropertyName = findPropertyName(properties, ["project"], "relation");
-
   const reportNumber = await buildReportNumber();
-  if (titlePropertyName) pageProperties[titlePropertyName] = buildTitleProperty(reportNumber);
-  if (reportNumberPropertyName && reportNumberPropertyName !== titlePropertyName) pageProperties[reportNumberPropertyName] = buildRichTextProperty(reportNumber);
-  if (reportContentPropertyName) pageProperties[reportContentPropertyName] = buildRichTextProperty(reportResult.report_content);
-  if (projectRelationPropertyName) pageProperties[projectRelationPropertyName] = { relation: [{ id: projectId }] };
+  const pageProperties: NotionCreatePageProperties = {
+    report_number: buildTitleProperty(reportNumber),
+    project: { relation: [{ id: projectId }] },
+    report_content: buildRichTextProperty(reportResult.report_content),
+  };
 
   const page = await notion.pages.create({
     parent: { database_id: databaseId },

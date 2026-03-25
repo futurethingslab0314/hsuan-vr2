@@ -458,33 +458,37 @@ AI orchestration v1 由四個 skill 組成：
 討論階段分為：
 
 - clarifying
-- framing
 - exploring
-- aligning
+- framing
 - wrapping
+
+v1 採累積對話狀態判斷，不以單一訊息分類，並使用單向前進狀態機：
+
+- `clarifying -> exploring -> framing -> wrapping`
+
+原則上不主動倒退，且每輪最多升一階。
 
 **clarifying**
 
+- 目的：同步背景知識、限制條件與基礎事實
 - 優先 UX、Researcher
 - 避免讓 UI 或 Engineer 過早主導
 
-**framing**
-
-- 優先 UX、PM
-- Researcher 可補驗證提醒
-
 **exploring**
 
+- 目的：擴散不同方向、方案與機會點
 - 可多用雙人搭配
 - 常見為 PM + UX、UX + UI、PM + Engineer
 
-**aligning**
+**framing**
 
-- 優先 PM、Engineer、UX
-- 著重取捨與收斂
+- 目的：將前面發散內容整理成結構化觀點與核心方向
+- 優先 UX、PM
+- Researcher 可補驗證提醒
 
 **wrapping**
 
+- 目的：確認共識、整理下一步與交付內容
 - 優先 PM
 - 可搭配 Researcher 或 system summary
 - 不再大幅發散新方向

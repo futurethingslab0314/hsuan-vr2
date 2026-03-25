@@ -53,6 +53,13 @@ v1 最簡版可使用空 body：
 - `constraints_ai`
 - `open_questions_ai`
 
+`currentstage_user` 的合法值僅為：
+
+- `discover`
+- `define`
+- `develop`
+- `deliver`
+
 這些就是 `Team Composer` 的主要輸入。
 
 因此這條 route 預設依賴 `analyze` 已先成功執行。若 AI 分析欄位為空，這條應該報錯，而不是硬生成 team。
@@ -175,6 +182,13 @@ v1 最簡版可使用空 body：
 
 - `project`
 - `currentstage_user`
+
+合法值僅為：
+
+- `discover`
+- `define`
+- `develop`
+- `deliver`
 - `project_summary_ai`
 - `problem_statement_ai`
 - `target_users_ai`
@@ -190,7 +204,14 @@ v1 最簡版可使用空 body：
 
 - `project_summary_ai` 有值
 - `problem_statement_ai` 有值
-- `currentstage_user` 有值
+- `currentstage_user`
+
+合法值僅為：
+
+- `discover`
+- `define`
+- `develop`
+- `deliver` 有值
 
 ### `buildTeamComposerInput(projectData)`
 
@@ -206,7 +227,7 @@ v1 最簡版可使用空 body：
   "core_goals": ["..."],
   "constraints": ["..."],
   "open_questions": ["..."],
-  "project_stage": "mvp_planning"
+  "project_stage": "define"
 }
 ```
 
@@ -303,4 +324,8 @@ v1 先不要在這條 route 混進以下責任：
 - 不要更新 `discussion_stage_ai`
 - 不要寫 `REPORT`
 - 不要在這裡直接進行成員編輯
+
+
+
+
 

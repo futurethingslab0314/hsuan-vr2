@@ -37,7 +37,7 @@
   "project": "AI Team Builder MVP",
   "input_prompt_user": "我想做一個讓產品團隊可以跟 AI 團隊一起討論需求的工具。",
   "input_prompt_goal_user": "驗證 AI 團隊協作體驗是否有價值",
-  "currentstage_user": "mvp_planning",
+  "currentstage_user": "define",
   "status": "draft"
 }
 ```
@@ -110,7 +110,7 @@
   "analysis": {
     "project_summary_ai": "...",
     "problem_statement_ai": "...",
-    "suggested_stage_ai": "mvp_planning",
+    "suggested_stage_ai": "define",
     "analysis_confidence_ai": 0.86
   }
 }
@@ -339,7 +339,16 @@ v1 不建議自動封存，先讓使用者決定是否 archive。
 ### `MapView`
 
 - 顯示 `TEAM_MEMBER`
-- 若未來支援編輯，可再補 `PATCH /api/team-members/:memberId`
+- 目前已支援成員編輯
+- 使用 `PATCH /api/projects/:projectId/team-members/:memberId`
+- 可更新：
+  - `role_background_identity`
+  - `role_target`
+  - `role_knowledge_reference`
+  - `role_rules`
+  - `role_workflow`
+  - `role_response_format`
+  - `role_tone`
 
 ### `ChatView`
 
@@ -357,5 +366,6 @@ v1 不建議自動封存，先讓使用者決定是否 archive。
 4. `POST /api/projects/:projectId/chat`
 5. `POST /api/projects/:projectId/report/generate`
 
-不要先加太多 `PATCH`、`DELETE`、版本控制 API，先把主路徑跑通。
+目前已補上成員編輯 `PATCH`，其餘 `DELETE`、版本控制等 API 仍可延後，先以主路徑穩定運作為優先。
+
 

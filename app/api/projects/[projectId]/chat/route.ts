@@ -87,6 +87,8 @@ type ConversationOrchestratorResult = {
   ready_for_report: boolean;
 };
 
+type DiscussionStage = "clarifying" | "exploring" | "framing" | "wrapping";
+
 const chatRequestSchema = z.object({
   user_message: z.string().trim().min(1, "user_message is required").max(4000),
   tagged_members: z.array(z.string().trim().min(1)).optional().default([]),
@@ -110,20 +112,125 @@ function joinLines(values: string[]): string {
   return values.join("\n");
 }
 
-function findPropertyName(properties: Record<string, DbProperty>, candidates: string[], expectedType?: string): string | undefined {
-  const normalizedCandidates = new Set(candidates.map(normalize));
-  const exactMatch = Object.entries(properties).find(([name, prop]) => {
-    const typeMatches = expectedType ? prop.type === expectedType : true;
-    return typeMatches && normalizedCandidates.has(normalize(name));
-  });
-  if (exactMatch) return exactMatch[0];
+function normalizeDiscussionStage(value: string | undefined): DiscussionStage {
+  const normalized = value?.trim().toLowerCase();
 
-  const partialMatch = Object.entries(properties).find(([name, prop]) => {
-    const typeMatches = expectedType ? prop.type === expectedType : true;
-    const normalizedName = normalize(name);
-    return typeMatches && Array.from(normalizedCandidates).some((candidate) => normalizedName.includes(candidate));
-  });
-  return partialMatch?.[0];
+  if (
+    normalized === "clarifying" ||
+    normalized === "exploring" ||
+    normalized === "framing" ||
+    normalized === "wrapping"
+  ) {
+    return normalized;
+  }
+
+  return "clarifying";
+}
+
+function hasAnyKeyword(value: string, keywords: string[]) {
+  const text = value.toLowerCase();
+  return keywords.some((keyword) => text.includes(keyword));
+}
+
+function shouldAdvanceToExploring(userMessage: string, systemSummary: string, nextFocus: string) {
+  const combined = `${userMessage}\n${systemSummary}\n${nextFocus}`.toLowerCase();
+
+  return hasAnyKeyword(combined, [
+    "方向",
+    "方案",
+    "可能性",
+    "做法",
+    "選項",
+    "探索",
+    "比較不同",
+    "有哪些",
+    "可以怎麼做",
+    "opportunity",
+    "options",
+    "approach",
+    "explore",
+  ]);
+}
+
+function shouldAdvanceToFraming(systemSummary: string, confirmedPoints: string, nextFocus: string) {
+  const combined = `${systemSummary}\n${confirmedPoints}\n${nextFocus}`.toLowerCase();
+
+  return hasAnyKeyword(combined, [
+    "收斂",
+    "方向",
+    "核心",
+    "優先",
+    "取捨",
+    "共識",
+    "定義",
+    "範圍",
+    "mvp",
+    "priority",
+    "tradeoff",
+    "direction",
+    "focus",
+  ]);
+}
+
+function shouldAdvanceToWrapping(userMessage: string, systemSummary: string, confirmedPoints: string, nextFocus: string) {
+  const combined = `${userMessage}\n${systemSummary}\n${confirmedPoints}\n${nextFocus}`.toLowerCase();
+
+  return hasAnyKeyword(combined, [
+    "結論",
+    "總結",
+    "下一步",
+    "行動",
+    "報告",
+    "整理",
+    "定案",
+    "共識",
+    "執行",
+    "summary",
+    "next step",
+    "action",
+    "report",
+    "wrap",
+  ]);
+}
+
+function determineDiscussionStage({
+  currentStage,
+  userMessage,
+  systemSummary,
+  confirmedPoints,
+  nextFocus,
+}: {
+  currentStage: string;
+  userMessage: string;
+  systemSummary: string;
+  confirmedPoints: string[];
+  nextFocus: string;
+}): DiscussionStage {
+  const stage = normalizeDiscussionStage(currentStage);
+  const confirmedPointsText = joinLines(confirmedPoints);
+
+  if (stage === "clarifying") {
+    if (shouldAdvanceToExploring(userMessage, systemSummary, nextFocus)) {
+      return "exploring";
+    }
+    return "clarifying";
+  }
+
+  if (stage === "exploring") {
+    if (shouldAdvanceToFraming(systemSummary, confirmedPointsText, nextFocus)) {
+      return "framing";
+    }
+    return "exploring";
+  }
+
+  if (stage === "framing") {
+    if (shouldAdvanceToWrapping(userMessage, systemSummary, confirmedPointsText, nextFocus)) {
+      return "wrapping";
+    }
+    return "framing";
+  }
+
+  return "wrapping";
 }
 
 function getRichTextValue(properties: Record<string, DbProperty>, propertyName: string | undefined): string {
@@ -186,49 +293,38 @@ function extractProjectForChat(projectPage: Awaited<ReturnType<typeof notion.pag
   }
 
   const properties = projectPage.properties as Record<string, DbProperty>;
-  const projectPropertyName = findPropertyName(properties, ["project"], "title") ?? findPropertyName(properties, ["project"], "rich_text");
 
   return {
     properties,
-    project: getTitleValue(properties, projectPropertyName) || getRichTextValue(properties, projectPropertyName),
-    currentstage_user: getSelectValue(properties, findPropertyName(properties, ["currentstage_user"], "select")),
-    project_summary_ai: getRichTextValue(properties, findPropertyName(properties, ["project_summary_ai"], "rich_text")),
-    problem_statement_ai: getRichTextValue(properties, findPropertyName(properties, ["problem_statement_ai"], "rich_text")),
-    chat_content: getRichTextValue(properties, findPropertyName(properties, ["chat_content"], "rich_text")),
-    discussion_stage_ai: getSelectValue(properties, findPropertyName(properties, ["discussion_stage_ai"], "select")),
-    confirmed_points_ai: getRichTextValue(properties, findPropertyName(properties, ["confirmed_points_ai"], "rich_text")),
-    assumptions_ai: getRichTextValue(properties, findPropertyName(properties, ["assumptions_ai"], "rich_text")),
-    next_focus_ai: getRichTextValue(properties, findPropertyName(properties, ["next_focus_ai"], "rich_text")),
-    ready_for_report_ai: getCheckboxValue(properties, findPropertyName(properties, ["ready_for_report_ai"], "checkbox")),
+    project: getTitleValue(properties, "project"),
+    currentstage_user: getSelectValue(properties, "currentstage_user"),
+    project_summary_ai: getRichTextValue(properties, "project_summary_ai"),
+    problem_statement_ai: getRichTextValue(properties, "problem_statement_ai"),
+    chat_content: getRichTextValue(properties, "chat_content"),
+    discussion_stage_ai: getSelectValue(properties, "discussion_stage_ai"),
+    confirmed_points_ai: getRichTextValue(properties, "confirmed_points_ai"),
+    assumptions_ai: getRichTextValue(properties, "assumptions_ai"),
+    next_focus_ai: getRichTextValue(properties, "next_focus_ai"),
+    ready_for_report_ai: getCheckboxValue(properties, "ready_for_report_ai"),
   };
 }
 
 async function listTeamMembersByProject(projectId: string) {
   const databaseId = getNotionDatabaseId("teamMembers");
   const db = await notion.databases.retrieve({ database_id: databaseId });
-  if (!("properties" in db) || !("data_sources" in db) || !db.data_sources?.length) {
+  if (!("data_sources" in db) || !db.data_sources?.length) {
     throw new ChatRouteError("TEAM_MEMBER database metadata is incomplete", 500);
-  }
-
-  const properties = db.properties as Record<string, DbProperty>;
-  const relationPropertyName = findPropertyName(properties, ["project"], "relation");
-  if (!relationPropertyName) {
-    throw new ChatRouteError("TEAM_MEMBER database is missing project relation", 500);
   }
 
   const queryArgs: Parameters<typeof notion.dataSources.query>[0] = {
     data_source_id: db.data_sources[0].id,
     filter: {
-      property: relationPropertyName,
+      property: "project",
       relation: { contains: projectId },
     },
+    sorts: [{ property: "display_order", direction: "ascending" }],
     page_size: 20,
   };
-
-  const displayOrderPropertyName = findPropertyName(properties, ["display_order"], "number");
-  if (displayOrderPropertyName) {
-    queryArgs.sorts = [{ property: displayOrderPropertyName, direction: "ascending" }];
-  }
 
   const result = await notion.dataSources.query(queryArgs);
   return result.results;
@@ -239,25 +335,24 @@ function extractTeamMembersForChat(teamMemberPages: Array<Awaited<ReturnType<typ
     .filter((page): page is Extract<typeof page, { properties: Record<string, DbProperty>; id: string }> => "properties" in page)
     .map((page) => {
       const properties = page.properties as Record<string, DbProperty>;
-      const memberNamePropertyName = findPropertyName(properties, ["member_name"], "title") ?? findPropertyName(properties, ["member_name"], "rich_text");
       return {
         member_id: page.id,
-        member_name: getTitleValue(properties, memberNamePropertyName) || getRichTextValue(properties, memberNamePropertyName),
-        role_type_ai: getSelectValue(properties, findPropertyName(properties, ["role_type_ai"], "select")),
-        custom_role_label_ai: getRichTextValue(properties, findPropertyName(properties, ["custom_role_label_ai"], "rich_text")),
-        is_custom_role: getCheckboxValue(properties, findPropertyName(properties, ["is_custom_role"], "checkbox")),
-        role_background_identity: getRichTextValue(properties, findPropertyName(properties, ["role_background_identity"], "rich_text")),
-        role_target: getRichTextValue(properties, findPropertyName(properties, ["role_target"], "rich_text")),
-        role_knowledge_reference: getRichTextValue(properties, findPropertyName(properties, ["role_knowledge_reference"], "rich_text")),
-        role_rules: getRichTextValue(properties, findPropertyName(properties, ["role_rules"], "rich_text")),
-        role_workflow: getRichTextValue(properties, findPropertyName(properties, ["role_workflow"], "rich_text")),
-        role_response_format: getRichTextValue(properties, findPropertyName(properties, ["role_response_format"], "rich_text")),
-        role_tone: getRichTextValue(properties, findPropertyName(properties, ["role_tone"], "rich_text")),
-        why_this_role: getRichTextValue(properties, findPropertyName(properties, ["why_this_role"], "rich_text")),
-        routing_good_for: getRichTextValue(properties, findPropertyName(properties, ["routing_good_for"], "rich_text")),
-        routing_avoid_for: getRichTextValue(properties, findPropertyName(properties, ["routing_avoid_for"], "rich_text")),
-        routing_pairs_well_with: getRichTextValue(properties, findPropertyName(properties, ["routing_pairs_well_with"], "rich_text")),
-        display_order: getNumberValue(properties, findPropertyName(properties, ["display_order"], "number")),
+        member_name: getTitleValue(properties, "member_name"),
+        role_type_ai: getSelectValue(properties, "role_type_ai"),
+        custom_role_label_ai: getRichTextValue(properties, "custom_role_label_ai"),
+        is_custom_role: getCheckboxValue(properties, "is_custom_role"),
+        role_background_identity: getRichTextValue(properties, "role_background_identity"),
+        role_target: getRichTextValue(properties, "role_target"),
+        role_knowledge_reference: getRichTextValue(properties, "role_knowledge_reference"),
+        role_rules: getRichTextValue(properties, "role_rules"),
+        role_workflow: getRichTextValue(properties, "role_workflow"),
+        role_response_format: getRichTextValue(properties, "role_response_format"),
+        role_tone: getRichTextValue(properties, "role_tone"),
+        why_this_role: getRichTextValue(properties, "why_this_role"),
+        routing_good_for: getRichTextValue(properties, "routing_good_for"),
+        routing_avoid_for: getRichTextValue(properties, "routing_avoid_for"),
+        routing_pairs_well_with: getRichTextValue(properties, "routing_pairs_well_with"),
+        display_order: getNumberValue(properties, "display_order"),
       };
     });
 }
@@ -342,9 +437,22 @@ async function runConversationOrchestrator(input: ConversationOrchestratorInput)
     content: `${member.member_name} recommends treating "${input.user_message}" as ${stageFraming[input.project_stage] ?? "a product discussion"} from the ${member.role_type_ai} perspective.`,
   }));
 
+  const nextDiscussionStage = determineDiscussionStage({
+    currentStage: input.decision_state.discussion_stage_ai,
+    userMessage: input.user_message,
+    systemSummary: currentStageSummary.systemSummary,
+    confirmedPoints: currentStageSummary.confirmedPoints,
+    nextFocus: currentStageSummary.nextFocus,
+  });
+
+  const readyForReport =
+    nextDiscussionStage === "wrapping" &&
+    currentStageSummary.confirmedPoints.length > 0 &&
+    currentStageSummary.nextFocus.trim().length > 0;
+
   return {
     message_type: "feature_scope",
-    discussion_stage: "aligning",
+    discussion_stage: nextDiscussionStage,
     selected_speakers: selectedMembers.map((member) => member.member_id),
     responses,
     system_summary: currentStageSummary.systemSummary,
@@ -353,7 +461,7 @@ async function runConversationOrchestrator(input: ConversationOrchestratorInput)
       assumptions: currentStageSummary.assumptions,
       next_focus: currentStageSummary.nextFocus,
     },
-    ready_for_report: false,
+    ready_for_report: readyForReport,
   };
 }
 
@@ -370,19 +478,24 @@ function appendChatContent(existingChatContent: string, userMessage: string, res
 
 function buildProjectChatUpdatePayload(projectProperties: Record<string, DbProperty>, chatResult: ConversationOrchestratorResult, nextChatContent: string): NotionUpdatePageProperties {
   const payload: NotionUpdatePageProperties = {};
-  const chatContentPropertyName = findPropertyName(projectProperties, ["chat_content"], "rich_text");
-  const discussionStagePropertyName = findPropertyName(projectProperties, ["discussion_stage_ai"], "select");
-  const confirmedPointsPropertyName = findPropertyName(projectProperties, ["confirmed_points_ai"], "rich_text");
-  const assumptionsPropertyName = findPropertyName(projectProperties, ["assumptions_ai"], "rich_text");
-  const nextFocusPropertyName = findPropertyName(projectProperties, ["next_focus_ai"], "rich_text");
-  const readyForReportPropertyName = findPropertyName(projectProperties, ["ready_for_report_ai"], "checkbox");
-
-  if (chatContentPropertyName) payload[chatContentPropertyName] = buildRichTextProperty(nextChatContent);
-  if (discussionStagePropertyName) payload[discussionStagePropertyName] = buildSelectProperty(projectProperties, discussionStagePropertyName, chatResult.discussion_stage);
-  if (confirmedPointsPropertyName) payload[confirmedPointsPropertyName] = buildRichTextProperty(joinLines(chatResult.discussion_state_update.confirmed_points));
-  if (assumptionsPropertyName) payload[assumptionsPropertyName] = buildRichTextProperty(joinLines(chatResult.discussion_state_update.assumptions));
-  if (nextFocusPropertyName) payload[nextFocusPropertyName] = buildRichTextProperty(chatResult.discussion_state_update.next_focus);
-  if (readyForReportPropertyName) payload[readyForReportPropertyName] = buildCheckboxProperty(chatResult.ready_for_report);
+  if (projectProperties.chat_content?.type === "rich_text") {
+    payload.chat_content = buildRichTextProperty(nextChatContent);
+  }
+  if (projectProperties.discussion_stage_ai?.type === "select" || projectProperties.discussion_stage_ai?.type === "status") {
+    payload.discussion_stage_ai = buildSelectProperty(projectProperties, "discussion_stage_ai", chatResult.discussion_stage);
+  }
+  if (projectProperties.confirmed_points_ai?.type === "rich_text") {
+    payload.confirmed_points_ai = buildRichTextProperty(joinLines(chatResult.discussion_state_update.confirmed_points));
+  }
+  if (projectProperties.assumptions_ai?.type === "rich_text") {
+    payload.assumptions_ai = buildRichTextProperty(joinLines(chatResult.discussion_state_update.assumptions));
+  }
+  if (projectProperties.next_focus_ai?.type === "rich_text") {
+    payload.next_focus_ai = buildRichTextProperty(chatResult.discussion_state_update.next_focus);
+  }
+  if (projectProperties.ready_for_report_ai?.type === "checkbox") {
+    payload.ready_for_report_ai = buildCheckboxProperty(chatResult.ready_for_report);
+  }
 
   return payload;
 }

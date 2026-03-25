@@ -54,6 +54,12 @@ v1 先不一定需要。
 - `status`
 
 其中前四項為 `Requirement Analyzer` 的主要輸入。
+`currentstage_user` / `suggested_stage_ai` 僅可為：
+
+- `discover`
+- `define`
+- `develop`
+- `deliver`
 
 ## 5. Notion 讀取欄位對照
 
@@ -74,7 +80,7 @@ v1 先不一定需要。
   "project": "AI Team Builder MVP",
   "original_prompt": "我想做一個讓產品團隊可以跟 AI 團隊一起討論需求的工具。",
   "project_goal": "驗證 AI 團隊協作體驗是否有價值",
-  "project_stage": "mvp_planning"
+  "project_stage": "define"
 }
 ```
 
@@ -107,7 +113,7 @@ v1 先不一定需要。
     "core_goals_ai": "驗證 AI 團隊協作體驗是否有價值\n幫助使用者快速收斂產品方向",
     "constraints_ai": "v1 聚焦 MVP\n輸出以一頁式摘要為主",
     "open_questions_ai": "第一版應支援哪些角色\n摘要生成要多輕量",
-    "suggested_stage_ai": "mvp_planning",
+    "suggested_stage_ai": "define",
     "analysis_confidence_ai": 0.86
   },
   "status": "active"
@@ -165,4 +171,6 @@ v1 先不要在這條 route 混入以下責任：
 
 - `joinLines(values: string[]): string`
 - `validateProjectForAnalysis(projectData)`
+
+
 

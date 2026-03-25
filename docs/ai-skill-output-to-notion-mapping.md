@@ -35,6 +35,13 @@
 - `input_prompt_goal_user`
 - `currentstage_user`
 
+`currentstage_user` 與 `suggested_stage_ai` 現在採用的階段值為：
+
+- `discover`
+- `define`
+- `develop`
+- `deliver`
+
 ## 3. Team Composer
 
 用途：根據分析結果建立 AI 團隊角色。
@@ -65,6 +72,37 @@
 | 系統動作 | Notion 欄位 | 資料表 | 備註 |
 |---|---|---|---|
 | project relation | `project` | `TEAM_MEMBER` | 連回所屬 project |
+
+### 前端目前實際接收與編輯的欄位
+
+雖然 `TEAM_MEMBER` 在 Notion 中已寫入完整角色資料，但目前前端 [`src/App.tsx`](C:/Users/User/Documents/Playground/ai-team-builder/src/App.tsx) 與 [`src/components/views/MapView.tsx`](C:/Users/User/Documents/Playground/ai-team-builder/src/components/views/MapView.tsx) 只實際接收並使用其中一部分欄位。
+
+目前前端有接到並映射的主要欄位：
+
+- `member_name`
+- `role_type_ai`
+- `is_custom_role`
+- `role_background_identity`
+- `role_target`
+- `role_knowledge_reference`
+- `role_rules`
+- `role_workflow`
+- `role_response_format`
+- `role_tone`
+- `display_order`
+
+目前前端尚未帶進 UI 的欄位：
+
+- `custom_role_label_ai`
+- `why_this_role`
+- `routing_good_for`
+- `routing_avoid_for`
+- `routing_pairs_well_with`
+
+因此，v1 文件若提到「系統可用欄位」，需要區分：
+
+- Notion / 後端已寫入欄位
+- 前端目前已實際接入並可顯示 / 編輯的欄位
 
 ## 4. Conversation Orchestrator
 
@@ -175,4 +213,8 @@ v1 建議使用：
 - `draft`
 - `active`
 - `archived`
+
+
+
+
 

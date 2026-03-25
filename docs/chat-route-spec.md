@@ -150,7 +150,7 @@
   ],
   "system_summary": "目前共識偏向：第一版應保留 AI 團隊協作感，但不必一開始就做完整複雜的多人角色切換機制。",
   "discussion_state": {
-    "discussion_stage_ai": "aligning",
+    "discussion_stage_ai": "framing",
     "confirmed_points_ai": "MVP 應先驗證協作感，而不是追求完整角色機制",
     "assumptions_ai": "簡化版角色協作已足夠讓使用者感受到價值",
     "next_focus_ai": "定義簡化版多人協作互動的最小範圍",
@@ -305,7 +305,7 @@
 ```json
 {
   "message_type": "feature_scope",
-  "discussion_stage": "aligning",
+  "discussion_stage": "framing",
   "selected_speakers": [],
   "responses": [],
   "system_summary": "....",
@@ -317,6 +317,36 @@
   "ready_for_report": false
 }
 ```
+
+### `discussion_stage_ai` 四階段規格
+
+v1 的 `discussion_stage_ai` 採用累積對話狀態判斷，不以單一訊息分類。
+
+正式值：
+
+- `clarifying`
+- `exploring`
+- `framing`
+- `wrapping`
+
+判斷原則：
+
+- 以目前既有的 `discussion_stage_ai` 為基準
+- 綜合本輪 `user_message`、`system_summary`、`confirmed_points_ai`、`next_focus_ai` 判斷
+- 採單向前進狀態機：
+  - `clarifying -> exploring -> framing -> wrapping`
+- v1 原則上不主動倒退
+- 每輪最多升一階
+- 若目前 `discussion_stage_ai` 為空，預設從 `clarifying` 開始
+
+升階條件概要：
+
+- `clarifying -> exploring`
+  - 開始提出多種候選方向、做法或機會點
+- `exploring -> framing`
+  - 開始比較方案、收斂方向、形成初步共識
+- `framing -> wrapping`
+  - 已形成較明確結論，並開始整理下一步、交付或報告
 
 ### `appendChatContent(existingChatContent, userMessage, responses, systemSummary)`
 

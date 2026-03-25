@@ -72,6 +72,13 @@
 - `next_focus_ai`
 - `ready_for_report_ai`
 
+`project_stage` / `currentstage_user` 在目前系統中應使用：
+
+- `discover`
+- `define`
+- `develop`
+- `deliver`
+
 ### 來自 `TEAM_MEMBER` 的欄位
 
 整理成：
@@ -112,15 +119,6 @@
 {
   "ok": false,
   "error": "Project not found"
-}
-```
-
-#### 尚未準備好生成 report
-
-```json
-{
-  "ok": false,
-  "error": "Project is not ready for report generation"
 }
 ```
 
@@ -206,6 +204,8 @@ v1 建議最少取：
 - `problem_statement_ai` 有值
 - `chat_content` 有值
 - 至少有一位 team member
+
+`ready_for_report_ai` 在 v1 放寬版中保留欄位，但不再作為 report 生成的硬性阻擋條件。
 
 ### `buildReportGeneratorInput(projectData, members)`
 
@@ -325,4 +325,8 @@ v1 先不要混進：
 - 不要回頭改 AI 分析欄位
 - 不要修改 `TEAM_MEMBER`
 - 不要把 report 同步回 `PROJECT`
+
+
+
+
 
