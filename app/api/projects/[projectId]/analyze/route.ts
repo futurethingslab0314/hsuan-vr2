@@ -1,5 +1,8 @@
 ﻿import { NextResponse } from "next/server";
+import { z } from "zod";
+import { zodTextFormat } from "openai/helpers/zod";
 import { notion } from "@/src/lib/notion";
+import { openai } from "@/src/lib/openai";
 import { PROJECT_STAGE_VALUES } from "@/src/constants/projectStages";
 
 type DbProperty = {
@@ -48,6 +51,17 @@ type RequirementAnalyzerResult = {
   suggested_stage: string;
   analysis_confidence: number;
 };
+
+const requirementAnalyzerSchema = z.object({
+  project_summary: z.string(),
+  problem_statement: z.string(),
+  target_users: z.array(z.string()),
+  core_goals: z.array(z.string()),
+  constraints: z.array(z.string()),
+  open_questions: z.array(z.string()),
+  suggested_stage: z.enum(PROJECT_STAGE_VALUES),
+  analysis_confidence: z.number().min(0).max(1),
+});
 
 class AnalyzeRouteError extends Error {
   statusCode: number;
@@ -211,25 +225,56 @@ function buildRequirementAnalyzerInput(projectInput: ProjectForAnalysis): Requir
 async function runRequirementAnalyzer(projectInput: ProjectForAnalysis): Promise<RequirementAnalyzerResult> {
   const analyzerInput = buildRequirementAnalyzerInput(projectInput);
 
-  return {
-    project_summary: `${analyzerInput.project} is a focused initiative for ${analyzerInput.project_goal}.`,
-    problem_statement: `The team needs a clearer way to turn \"${analyzerInput.original_prompt}\" into an actionable product direction.`,
-    target_users: ["Product teams", "Design collaborators"],
-    core_goals: [
-      analyzerInput.project_goal,
-      "Clarify scope and decision-making inputs",
+  const response = await openai.responses.parse({
+    model: "gpt-4o-2024-08-06",
+    input: [
+      {
+        role: "system",
+        content: [
+          {
+            type: "input_text",
+            text: [
+              "You are the Requirement Analyzer for AI Team Builder.",
+              "Your job is to convert the user's project input into structured product analysis.",
+              "Return only valid structured output.",
+              "Use only these allowed project stages: discover, define, develop, deliver.",
+              "Be concrete, concise, and infer carefully from the provided input only.",
+              "Do not mention mock output, placeholders, or implementation notes.",
+            ].join("\n"),
+          },
+        ],
+      },
+      {
+        role: "user",
+        content: [
+          {
+            type: "input_text",
+            text: JSON.stringify(
+              {
+                project: analyzerInput.project,
+                original_prompt: analyzerInput.original_prompt,
+                project_goal: analyzerInput.project_goal,
+                project_stage: analyzerInput.project_stage,
+              },
+              null,
+              2
+            ),
+          },
+        ],
+      },
     ],
-    constraints: [
-      `Current stage: ${analyzerInput.project_stage}`,
-      "v1 uses mock analysis output",
-    ],
-    open_questions: [
-      "Which AI roles should be included first?",
-      "What output format creates the most value for users?",
-    ],
-    suggested_stage: analyzerInput.project_stage,
-    analysis_confidence: 0.78,
-  };
+    text: {
+      format: zodTextFormat(requirementAnalyzerSchema, "requirement_analyzer_result"),
+    },
+  });
+
+  const parsed = response.output_parsed;
+
+  if (!parsed) {
+    throw new AnalyzeRouteError("Requirement Analyzer returned no structured output", 500);
+  }
+
+  return parsed satisfies RequirementAnalyzerResult;
 }
 
 function buildProjectAnalysisUpdatePayload(
@@ -350,6 +395,3 @@ export async function POST(
     return handleAnalyzeRouteError(error);
   }
 }
-
-
-
