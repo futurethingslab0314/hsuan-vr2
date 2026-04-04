@@ -110,6 +110,20 @@ function joinLines(values: string[]): string {
   return values.join("\n");
 }
 
+function splitRichTextContent(value: string, maxLength = 2000) {
+  if (value.length <= maxLength) return [value];
+
+  const chunks: string[] = [];
+  let start = 0;
+
+  while (start < value.length) {
+    chunks.push(value.slice(start, start + maxLength));
+    start += maxLength;
+  }
+
+  return chunks;
+}
+
 function findPropertyName(properties: Record<string, DbProperty>, candidates: string[], expectedType?: string): string | undefined {
   const normalizedCandidates = new Set(candidates.map(normalize));
   const exactMatch = Object.entries(properties).find(([name, prop]) => {
@@ -147,7 +161,12 @@ function getSelectValue(properties: Record<string, DbProperty>, propertyName: st
 }
 
 function buildRichTextProperty(value: string) {
-  return { rich_text: [{ type: "text" as const, text: { content: value } }] };
+  return {
+    rich_text: splitRichTextContent(value).map((chunk) => ({
+      type: "text" as const,
+      text: { content: chunk },
+    })),
+  };
 }
 
 function buildTitleProperty(value: string) {
@@ -240,6 +259,10 @@ async function runTeamComposer(projectData: ProjectForTeamGeneration): Promise<T
               "Display order must start at 1 and increase sequentially.",
               "Project stages are: discover, define, develop, deliver.",
               "Match the team composition to the project stage and problem.",
+              "All generated text content must be written in Traditional Chinese used in Taiwan.",
+              "Do not reply in English unless the user explicitly asks for English.",
+              "team_rationale, background_identity, tasks, knowledge, rules, workflow, response_format, tone, why_this_role, and routing_hints must be in Traditional Chinese.",
+              "role_type must remain one of the allowed enum values, and member names may remain as proper names.",
             ].join("\n"),
           },
         ],

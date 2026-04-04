@@ -73,6 +73,13 @@ const reportGeneratorSchema = z.object({
   report_content: z.string(),
 });
 
+const REPORT_STAGE_LABELS: Record<string, string> = {
+  discover: "Discover 探索階段",
+  define: "Define 定義階段",
+  develop: "Develop 發展階段",
+  deliver: "Deliver 交付階段",
+};
+
 class ReportGenerationRouteError extends Error {
   statusCode: number;
 
@@ -114,8 +121,27 @@ function getCheckboxValue(properties: Record<string, DbProperty>, propertyName: 
   return Boolean(properties[propertyName]?.checkbox);
 }
 
+function splitRichTextContent(value: string, maxLength = 2000) {
+  if (value.length <= maxLength) return [value];
+
+  const chunks: string[] = [];
+  let start = 0;
+
+  while (start < value.length) {
+    chunks.push(value.slice(start, start + maxLength));
+    start += maxLength;
+  }
+
+  return chunks;
+}
+
 function buildRichTextProperty(value: string) {
-  return { rich_text: [{ type: "text" as const, text: { content: value } }] };
+  return {
+    rich_text: splitRichTextContent(value).map((chunk) => ({
+      type: "text" as const,
+      text: { content: chunk },
+    })),
+  };
 }
 
 function buildTitleProperty(value: string) {
@@ -244,6 +270,10 @@ async function runReportGenerator(input: ReportGeneratorInput): Promise<ReportGe
               "Do not repeat the entire chat transcript verbatim.",
               "If information is uncertain, label it as assumption or open question.",
               "Project stages are: discover, define, develop, deliver.",
+              "All output content must be written in Traditional Chinese used in Taiwan.",
+              "Do not reply in English unless the user explicitly asks for English.",
+              "report_title and report_content must both be written in Traditional Chinese.",
+              "Use a concise Chinese report title suitable for a project plan or strategy summary.",
             ].join("\n"),
           },
         ],
@@ -266,7 +296,23 @@ async function runReportGenerator(input: ReportGeneratorInput): Promise<ReportGe
   const parsed = response.output_parsed;
 
   if (!parsed) {
-    throw new ReportGenerationRouteError("Report Generator returned no structured output", 500);
+    return {
+      report_title: `${REPORT_STAGE_LABELS[input.project_stage] ?? input.project_stage} 專案計畫書`,
+      report_content: [
+        "【執行摘要】",
+        "目前資料不足，系統未能成功生成完整的專案計畫書。",
+        "",
+        "【目前已知資訊】",
+        `原始需求：${input.original_prompt || "未提供"}`,
+        `設計目標：${input.project_goal || "未提供"}`,
+        `專案階段：${input.project_stage || "未提供"}`,
+        "",
+        "【建議下一步】",
+        "1. 補充更多討論內容",
+        "2. 明確整理已確認的決策點",
+        "3. 重新產生專案計畫書",
+      ].join("\n"),
+    };
   }
 
   return parsed satisfies ReportGeneratorResult;

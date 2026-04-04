@@ -17,9 +17,26 @@ const updateTeamMemberSchema = z.object({
   roleTone: z.string().trim().min(1).max(1000),
 });
 
+function splitRichTextContent(value: string, maxLength = 2000) {
+  if (value.length <= maxLength) return [value];
+
+  const chunks: string[] = [];
+  let start = 0;
+
+  while (start < value.length) {
+    chunks.push(value.slice(start, start + maxLength));
+    start += maxLength;
+  }
+
+  return chunks;
+}
+
 function buildRichTextProperty(value: string) {
   return {
-    rich_text: [{ type: "text" as const, text: { content: value } }],
+    rich_text: splitRichTextContent(value).map((chunk) => ({
+      type: "text" as const,
+      text: { content: chunk },
+    })),
   };
 }
 

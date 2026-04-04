@@ -293,8 +293,27 @@ function getNumberValue(properties: Record<string, DbProperty>, propertyName: st
   return properties[propertyName]?.number ?? 0;
 }
 
+function splitRichTextContent(value: string, maxLength = 2000) {
+  if (value.length <= maxLength) return [value];
+
+  const chunks: string[] = [];
+  let start = 0;
+
+  while (start < value.length) {
+    chunks.push(value.slice(start, start + maxLength));
+    start += maxLength;
+  }
+
+  return chunks;
+}
+
 function buildRichTextProperty(value: string) {
-  return { rich_text: [{ type: "text" as const, text: { content: value } }] };
+  return {
+    rich_text: splitRichTextContent(value).map((chunk) => ({
+      type: "text" as const,
+      text: { content: chunk },
+    })),
+  };
 }
 
 function buildCheckboxProperty(value: boolean) {
@@ -440,6 +459,9 @@ async function runConversationOrchestrator(input: ConversationOrchestratorInput)
               "system_summary should summarize the current discussion state clearly.",
               "ready_for_report should be true only when the discussion has enough clarity, confirmed points, and next steps.",
               "Project stages are: discover, define, develop, deliver.",
+              "All response content must be written in Traditional Chinese used in Taiwan.",
+              "Do not reply in English unless the user explicitly asks for English.",
+              "member_name and role_type_ai may remain as provided, but content, system_summary, confirmed_points, assumptions, and next_focus must be in Traditional Chinese.",
             ].join("\n"),
           },
         ],
@@ -477,7 +499,7 @@ async function runConversationOrchestrator(input: ConversationOrchestratorInput)
           member_id: member.member_id,
           member_name: member.member_name,
           role_type_ai: member.role_type_ai,
-          content: `${member.member_name} is reflecting on "${input.user_message}" from the ${member.role_type_ai} perspective.`,
+          content: `${member.member_name} 正在從 ${member.role_type_ai} 的角度回應「${input.user_message}」。`,
         }));
 
   const nextDiscussionStage = determineDiscussionStage({
