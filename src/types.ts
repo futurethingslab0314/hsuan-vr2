@@ -1,7 +1,7 @@
 ﻿export interface TeamMember {
   id: string;
   name: string;
-  role: string;
+  role: 'PM' | 'Researcher' | 'UX Designer' | 'Engineer';
   roleBackgroundIdentity: string;
   roleTarget: string;
   roleKnowledgeReference: string;

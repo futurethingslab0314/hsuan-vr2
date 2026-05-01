@@ -1,6 +1,7 @@
 ﻿import { motion, AnimatePresence } from 'motion/react';
 import { User, ChevronRight, X, Briefcase, Activity, BookOpen, FileText, MessageSquare, Save } from 'lucide-react';
 import { TeamMember } from '../../types';
+import { ROLE_TAGS } from '../../constants';
 import { RelationshipLines } from '../RelationshipLines';
 
 interface MapViewProps {
@@ -24,6 +25,13 @@ export const MapView = ({
   inputValue,
   setView
 }: MapViewProps) => {
+  const appendTag = (currentValue: string, tag: string) => {
+    const trimmed = currentValue.trim();
+    if (!trimmed) return tag;
+    if (trimmed.includes(tag)) return currentValue;
+    return `${trimmed} ${tag}`;
+  };
+
   return (
     <motion.div 
       key="map"
@@ -130,7 +138,7 @@ export const MapView = ({
                 </button>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-8 space-y-8 scrollbar-hide">
+              <div className="flex-1 overflow-y-auto p-8 space-y-8 scrollbar-hide text-white">
                 <section className="space-y-4">
                   <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-white/40">
                     <Briefcase size={14} /> Role Background Identity
@@ -142,7 +150,7 @@ export const MapView = ({
                   />
                 </section>
 
-                <section className="space-y-2">
+                <section className="space-y-3">
                   <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-white/40">
                     <Activity size={14} /> Role Target
                   </div>
@@ -151,9 +159,26 @@ export const MapView = ({
                     value={tempMember.roleTarget}
                     onChange={e => setTempMember({ ...tempMember, roleTarget: e.target.value })}
                   />
+                  <div className="flex flex-wrap gap-2">
+                    {ROLE_TAGS[tempMember.role].target.map((tag) => (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() =>
+                          setTempMember({
+                            ...tempMember,
+                            roleTarget: appendTag(tempMember.roleTarget, tag),
+                          })
+                        }
+                        className="px-3 py-1 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full text-[10px] text-white/60 transition-colors"
+                      >
+                        {tag}
+                      </button>
+                    ))}
+                  </div>
                 </section>
 
-                <section className="space-y-2">
+                <section className="space-y-3">
                   <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-white/40">
                     <BookOpen size={14} /> Role Knowledge Reference
                   </div>
@@ -162,9 +187,26 @@ export const MapView = ({
                     value={tempMember.roleKnowledgeReference}
                     onChange={e => setTempMember({ ...tempMember, roleKnowledgeReference: e.target.value })}
                   />
+                  <div className="flex flex-wrap gap-2">
+                    {ROLE_TAGS[tempMember.role].knowledge.map((tag) => (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() =>
+                          setTempMember({
+                            ...tempMember,
+                            roleKnowledgeReference: appendTag(tempMember.roleKnowledgeReference, tag),
+                          })
+                        }
+                        className="px-3 py-1 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full text-[10px] text-white/60 transition-colors"
+                      >
+                        {tag}
+                      </button>
+                    ))}
+                  </div>
                 </section>
 
-                <section className="space-y-2">
+                <section className="space-y-4">
                   <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-white/40">
                     <FileText size={14} /> Role Rules
                   </div>
@@ -175,18 +217,7 @@ export const MapView = ({
                   />
                 </section>
 
-                <section className="space-y-2">
-                  <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-white/40">
-                    <ChevronRight size={14} /> Role Workflow
-                  </div>
-                  <textarea
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:border-white/30 min-h-[80px] resize-none"
-                    value={tempMember.roleWorkflow}
-                    onChange={e => setTempMember({ ...tempMember, roleWorkflow: e.target.value })}
-                  />
-                </section>
-
-                <section className="space-y-2">
+                <section className="space-y-3">
                   <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-white/40">
                     <FileText size={14} /> Role Response Format
                   </div>
@@ -195,9 +226,26 @@ export const MapView = ({
                     value={tempMember.roleResponseFormat}
                     onChange={e => setTempMember({ ...tempMember, roleResponseFormat: e.target.value })}
                   />
+                  <div className="flex flex-wrap gap-2">
+                    {ROLE_TAGS[tempMember.role].format.map((tag) => (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() =>
+                          setTempMember({
+                            ...tempMember,
+                            roleResponseFormat: appendTag(tempMember.roleResponseFormat, tag),
+                          })
+                        }
+                        className="px-3 py-1 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full text-[10px] text-white/60 transition-colors"
+                      >
+                        {tag}
+                      </button>
+                    ))}
+                  </div>
                 </section>
 
-                <section className="space-y-2 pb-12">
+                <section className="space-y-3 pb-12">
                   <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-white/40">
                     <MessageSquare size={14} /> Role Tone
                   </div>
@@ -206,6 +254,23 @@ export const MapView = ({
                     value={tempMember.roleTone}
                     onChange={e => setTempMember({ ...tempMember, roleTone: e.target.value })}
                   />
+                  <div className="flex flex-wrap gap-2">
+                    {ROLE_TAGS[tempMember.role].tone.map((tag) => (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() =>
+                          setTempMember({
+                            ...tempMember,
+                            roleTone: appendTag(tempMember.roleTone, tag),
+                          })
+                        }
+                        className="px-3 py-1 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full text-[10px] text-white/60 transition-colors"
+                      >
+                        {tag}
+                      </button>
+                    ))}
+                  </div>
                 </section>
               </div>
 

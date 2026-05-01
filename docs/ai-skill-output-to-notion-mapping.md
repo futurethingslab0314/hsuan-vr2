@@ -51,7 +51,7 @@
 | AI skill 輸出欄位 | Notion 欄位 | 資料表 | 備註 |
 |---|---|---|---|
 | `name` | `member_name` | `TEAM_MEMBER` | 成員名稱 |
-| `role_type` | `role_type_ai` | `TEAM_MEMBER` | UX / PM / UI / Engineer / Researcher / custom |
+| `role_type` | `role_type_ai` | `TEAM_MEMBER` | PM / Researcher / UX Designer / Engineer / custom |
 | `custom_role_label` | `custom_role_label_ai` | `TEAM_MEMBER` | 特殊角色名稱 |
 | `is_custom_role` | `is_custom_role` | `TEAM_MEMBER` | 是否為特殊角色 |
 | `background_identity` | `role_background_identity` | `TEAM_MEMBER` | 角色背景、身分、專長 |

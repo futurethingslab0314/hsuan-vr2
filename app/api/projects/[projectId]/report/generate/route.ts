@@ -68,6 +68,8 @@ type ReportGeneratorResult = {
   report_content: string;
 };
 
+const ALLOWED_ROLE_TYPES = ["PM", "Researcher", "UX Designer", "Engineer"] as const;
+
 const reportGeneratorSchema = z.object({
   report_title: z.string(),
   report_content: z.string(),
@@ -88,6 +90,17 @@ class ReportGenerationRouteError extends Error {
     this.name = "ReportGenerationRouteError";
     this.statusCode = statusCode;
   }
+}
+
+function normalizeRoleType(value: string): (typeof ALLOWED_ROLE_TYPES)[number] {
+  const normalized = value.trim().toLowerCase();
+
+  if (normalized === "pm" || normalized === "product manager") return "PM";
+  if (normalized === "researcher" || normalized === "ux strategist") return "Researcher";
+  if (normalized === "ux designer" || normalized === "ux" || normalized === "ui" || normalized === "ui designer") return "UX Designer";
+  if (normalized === "engineer" || normalized === "prototyper") return "Engineer";
+
+  return "Engineer";
 }
 
 function splitLines(value: string): string[] {
@@ -212,7 +225,7 @@ function extractTeamMembersForReport(teamMemberPages: Array<Awaited<ReturnType<t
       const properties = page.properties as Record<string, DbProperty>;
       return {
         member_name: getTitleValue(properties, "member_name"),
-        role_type_ai: getSelectValue(properties, "role_type_ai"),
+        role_type_ai: normalizeRoleType(getSelectValue(properties, "role_type_ai")),
         why_this_role: getRichTextValue(properties, "why_this_role"),
       };
     });

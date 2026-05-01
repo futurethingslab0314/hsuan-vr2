@@ -1,4 +1,4 @@
-﻿# Team Members Generate Route Spec v1
+# Team Members Generate Route Spec v1
 
 ## 1. Route 目的
 
@@ -6,17 +6,23 @@
 
 - 讀取同一筆 `PROJECT`
 - 取出 `Requirement Analyzer` 已經寫回的分析結果
-- 呼叫 `Team Composer`
+- 根據 `PROJECT.currentstage_user` 讀取：
+  - 1 筆 `STAGE_PLAYBOOK`
+  - 該階段 4 筆 `ROLE_TEMPLATE`
+- 呼叫 `Team Composer`，對固定模板進行專案化微調
 - 在 `TEAM_MEMBER` 建立多筆成員資料
 - 透過 relation 連回 `PROJECT`
+- 透過 relation 連回 `ROLE_TEMPLATE`
 - 不在這一步處理聊天
 - 不在這一步生成 report
 
-它只負責「依分析結果建立團隊」。
+它只負責「依分析結果與角色模板建立團隊」。
 
 ## 2. 這條 route 完成後的狀態
 
 - `PROJECT` 已經有 AI 分析欄位
+- `STAGE_PLAYBOOK` 已經有 4 個階段規則
+- `ROLE_TEMPLATE` 已經有 16 筆模板
 - `TEAM_MEMBER` 下面已經有這個 project 對應的角色
 - 前端 `MapView` 可以改成讀真實 team member，而不是假資料
 
@@ -38,11 +44,11 @@ v1 最簡版可使用空 body：
 {}
 ```
 
-因為主要資料都已經在 `PROJECT` 與 `TEAM_MEMBER` 對應的 Notion 裡。
+因為主要資料都已經在 `PROJECT`、`STAGE_PLAYBOOK`、`ROLE_TEMPLATE` 對應的 Notion 裡。
 
 ## 5. 主要輸入來源
 
-這條 route 的主要輸入，來自 `PROJECT` 已經存在的欄位：
+這條 route 的主要 project analysis 輸入，來自 `PROJECT` 已經存在的欄位：
 
 - `project`
 - `currentstage_user`
@@ -60,11 +66,43 @@ v1 最簡版可使用空 body：
 - `develop`
 - `deliver`
 
-這些就是 `Team Composer` 的主要輸入。
-
 因此這條 route 預設依賴 `analyze` 已先成功執行。若 AI 分析欄位為空，這條應該報錯，而不是硬生成 team。
 
-## 6. Team Composer 的輸出要寫到哪裡
+## 6. 這條 route 新增依賴的模板資料來源
+
+### `STAGE_PLAYBOOK`
+
+應根據 `PROJECT.currentstage_user` 的值讀取 1 筆對應階段資料。
+
+目前欄位：
+
+- `stage_key`
+- `stage_goal`
+- `stage_core_principle`
+- `stage_behavior_rules`
+- `stage_response_pattern`
+- `stage_collaboration_flow`
+
+### `ROLE_TEMPLATE`
+
+應根據 `PROJECT.currentstage_user` 的值讀取 4 筆對應模板。
+
+目前欄位：
+
+- `template_name`
+- `stage_key`
+- `role_key`
+- `role_display_name`
+- `role_type_ai`
+- `base_tone`
+- `base_behavior`
+- `base_response_style`
+- `base_tasks`
+- `base_rules`
+
+這條 route 不再讓 OpenAI 自由決定角色集合，而是固定讀取當前階段的 4 個模板後，再做專案化微調。
+
+## 7. Team Composer 的輸出要寫到哪裡
 
 這條 route 主要寫入 `TEAM_MEMBER`。
 
@@ -72,6 +110,7 @@ v1 最簡版可使用空 body：
 
 - `member_name`
 - `project` relation
+- `role_template` relation
 - `role_type_ai`
 - `custom_role_label_ai`
 - `is_custom_role`
@@ -87,8 +126,10 @@ v1 最簡版可使用空 body：
 - `routing_avoid_for`
 - `routing_pairs_well_with`
 - `display_order`
+- `template_name`
+- `stage_key`
 
-## 7. Response 規格
+## 8. Response 規格
 
 ### 成功回應
 
@@ -99,19 +140,25 @@ v1 最簡版可使用空 body：
   "members": [
     {
       "member_id": "member-page-id-1",
-      "member_name": "Maya Chen",
+      "member_name": "PM 名稱",
       "role_type_ai": "PM",
       "is_custom_role": false
     },
     {
       "member_id": "member-page-id-2",
-      "member_name": "Alex Lin",
-      "role_type_ai": "UX",
+      "member_name": "Researcher 名稱",
+      "role_type_ai": "Researcher",
       "is_custom_role": false
     },
     {
       "member_id": "member-page-id-3",
-      "member_name": "David Wu",
+      "member_name": "UX Designer 名稱",
+      "role_type_ai": "UX Designer",
+      "is_custom_role": false
+    },
+    {
+      "member_id": "member-page-id-4",
+      "member_name": "Engineer 名稱",
       "role_type_ai": "Engineer",
       "is_custom_role": false
     }
@@ -139,6 +186,24 @@ v1 最簡版可使用空 body：
 }
 ```
 
+#### 找不到對應 stage playbook
+
+```json
+{
+  "ok": false,
+  "error": "Stage playbook not found for current project stage"
+}
+```
+
+#### 找不到完整的 4 筆角色模板
+
+```json
+{
+  "ok": false,
+  "error": "Role templates are incomplete for current project stage"
+}
+```
+
 #### 已經有 team members
 
 ```json
@@ -158,17 +223,19 @@ v1 最簡版可使用空 body：
 }
 ```
 
-## 8. 後端處理流程
+## 9. 後端處理流程
 
 1. 從 URL 取得 `projectId`
 2. 讀取 `PROJECT`
 3. 抽出 team generation 所需欄位
 4. 驗證 project 是否具備生成 team 的條件
-5. 呼叫 `Team Composer`
-6. 在 `TEAM_MEMBER` 建立多筆資料
-7. 回傳建立結果
+5. 根據 `currentstage_user` 查 1 筆 `STAGE_PLAYBOOK`
+6. 根據 `currentstage_user` 查 4 筆 `ROLE_TEMPLATE`
+7. 將專案分析結果、階段規則、角色模板一起送給 `Team Composer`
+8. 在 `TEAM_MEMBER` 建立多筆資料
+9. 回傳建立結果
 
-## 9. 最低限度需要的 helper function
+## 10. 最低限度需要的 helper function
 
 ### `getProjectPage(projectId)`
 
@@ -176,19 +243,12 @@ v1 最簡版可使用空 body：
 
 ### `extractProjectForTeamGeneration(projectPage)`
 
-用途：把 `PROJECT` page 轉成 `Team Composer` 需要的乾淨輸入。
+用途：把 `PROJECT` page 轉成 team generation 需要的乾淨輸入。
 
 應抽出的欄位：
 
 - `project`
 - `currentstage_user`
-
-合法值僅為：
-
-- `discover`
-- `define`
-- `develop`
-- `deliver`
 - `project_summary_ai`
 - `problem_statement_ai`
 - `target_users_ai`
@@ -204,18 +264,19 @@ v1 最簡版可使用空 body：
 
 - `project_summary_ai` 有值
 - `problem_statement_ai` 有值
-- `currentstage_user`
+- `currentstage_user` 有值
 
-合法值僅為：
+### `getStagePlaybookByStageKey(stageKey)`
 
-- `discover`
-- `define`
-- `develop`
-- `deliver` 有值
+用途：讀取 1 筆當前階段的 `STAGE_PLAYBOOK`。
 
-### `buildTeamComposerInput(projectData)`
+### `listRoleTemplatesByStageKey(stageKey)`
 
-用途：把 `PROJECT` 裡的資料轉成 `Team Composer` 的輸入格式。
+用途：讀取當前階段的 4 筆 `ROLE_TEMPLATE`。
+
+### `buildTeamComposerInput(projectData, stagePlaybook, roleTemplates)`
+
+用途：把 `PROJECT`、`STAGE_PLAYBOOK`、`ROLE_TEMPLATE` 一起轉成 `Team Composer` 的輸入格式。
 
 例如：
 
@@ -227,47 +288,46 @@ v1 最簡版可使用空 body：
   "core_goals": ["..."],
   "constraints": ["..."],
   "open_questions": ["..."],
-  "project_stage": "define"
-}
-```
-
-### `runTeamComposer(teamComposerInput)`
-
-用途：呼叫 OpenAI / Team Composer skill，回傳成員陣列。
-
-輸出建議：
-
-```json
-{
-  "team_rationale": "...",
-  "members": [
+  "project_stage": "define",
+  "stage_playbook": {
+    "stage_goal": "...",
+    "stage_core_principle": "...",
+    "stage_behavior_rules": "...",
+    "stage_response_pattern": "...",
+    "stage_collaboration_flow": "..."
+  },
+  "role_templates": [
     {
-      "name": "Maya Chen",
-      "role_type": "PM",
-      "custom_role_label": null,
-      "is_custom_role": false,
-      "background_identity": "...",
-      "tasks": ["..."],
-      "knowledge": ["..."],
-      "rules": "...",
-      "workflow": "...",
-      "response_format": "...",
-      "tone": "...",
-      "why_this_role": "...",
-      "routing_hints": {
-        "good_for": ["..."],
-        "avoid_for": ["..."],
-        "pairs_well_with": ["..."]
-      },
-      "display_order": 1
+      "template_name": "define_pm",
+      "role_key": "pm",
+      "role_display_name": "PM：...",
+      "role_type_ai": "PM",
+      "base_tone": "...",
+      "base_behavior": "...",
+      "base_response_style": "...",
+      "base_tasks": "...",
+      "base_rules": "..."
     }
   ]
 }
 ```
 
-### `buildTeamMemberCreatePayload(projectId, member, index)`
+### `runTeamComposerWithTemplates(teamComposerInput)`
+
+用途：呼叫 OpenAI / Team Composer skill，回傳成員陣列。
+
+這一步的目的不是自由發明 team，而是對固定模板做專案化微調。
+
+### `buildTeamMemberCreatePayload(projectId, member, templateRecord)`
 
 用途：把單一 member 轉成 Notion `pages.create` payload。
+
+責任：
+
+- 帶上 `project` relation
+- 帶上 `role_template` relation
+- 寫入 `template_name`
+- 寫入 `stage_key`
 
 ### `createTeamMembers(projectId, members)`
 
@@ -278,6 +338,7 @@ v1 最簡版可使用空 body：
 - loop members
 - 每一筆呼叫 `notion.pages.create`
 - 帶上 `project` relation
+- 帶上 `role_template` relation
 
 ### `listExistingTeamMembers(projectId)`
 
@@ -285,7 +346,7 @@ v1 最簡版可使用空 body：
 
 若這個 project 底下已經有 team member，就先擋掉。
 
-## 10. 這條 route 和 analyze route 的差別
+## 11. 這條 route 和 analyze route 的差別
 
 ### `analyze`
 
@@ -294,9 +355,11 @@ v1 最簡版可使用空 body：
 ### `team-members/generate`
 
 - 讀 `PROJECT`
+- 讀 `STAGE_PLAYBOOK`
+- 讀 `ROLE_TEMPLATE`
 - 新增多筆 `TEAM_MEMBER`
 
-## 11. 資料處理細節
+## 12. 資料處理細節
 
 統一規則：
 
@@ -309,6 +372,10 @@ v1 最簡版可使用空 body：
   - 同上
 - `open_questions_ai`
   - 同上
+- `stage_behavior_rules`
+  - 以整段 rich text 傳入 OpenAI
+- `base_tasks`
+  - 若在 Notion 中以換行存放，可在送給 OpenAI 前拆成字串或陣列，視 prompt 設計而定
 - `role_target`
   - 存換行字串
 - `role_knowledge_reference`
@@ -316,7 +383,21 @@ v1 最簡版可使用空 body：
 - `routing_good_for`
   - 存換行字串
 
-## 12. 這條 route 先不要做的事
+## 13. relation 設計
+
+這條 route 依賴以下 relation：
+
+- `TEAM_MEMBER.project -> PROJECT`
+- `TEAM_MEMBER.role_template -> ROLE_TEMPLATE`
+
+另外：
+
+- `PROJECT -> STAGE_PLAYBOOK` 不必建立 relation
+- `ROLE_TEMPLATE -> STAGE_PLAYBOOK` 不必建立 relation
+
+因為 `currentstage_user` / `stage_key` 已足夠完成查詢。
+
+## 14. 這條 route 先不要做的事
 
 v1 先不要在這條 route 混進以下責任：
 
@@ -324,8 +405,3 @@ v1 先不要在這條 route 混進以下責任：
 - 不要更新 `discussion_stage_ai`
 - 不要寫 `REPORT`
 - 不要在這裡直接進行成員編輯
-
-
-
-
-

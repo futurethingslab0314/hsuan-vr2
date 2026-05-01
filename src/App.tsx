@@ -24,7 +24,7 @@ type ChatMessage = {
 type GeneratedMember = {
   member_id: string;
   member_name: string;
-  role_type_ai: string;
+  role_type_ai: 'PM' | 'Researcher' | 'UX Designer' | 'Engineer';
   is_custom_role: boolean;
   role_background_identity: string;
   role_target: string;
@@ -300,7 +300,6 @@ export default function App() {
           roleTarget: tempMember.roleTarget,
           roleKnowledgeReference: tempMember.roleKnowledgeReference,
           roleRules: tempMember.roleRules,
-          roleWorkflow: tempMember.roleWorkflow,
           roleResponseFormat: tempMember.roleResponseFormat,
           roleTone: tempMember.roleTone,
         }),

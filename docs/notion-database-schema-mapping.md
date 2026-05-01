@@ -114,7 +114,7 @@ v1 可先把 `AnalysisResults` 併入 `Projects`，不一定要額外開第 5 �
   - 用途：關聯到專案
 - `role_type`
   - 型態：Select
-  - 建議選項：`UX`、`PM`、`UI`、`Engineer`、`Researcher`、`custom`
+  - 建議選項：`PM`、`Researcher`、`UX Designer`、`Engineer`、`custom`
 - `custom_role_label`
   - 型態：Rich text
   - 用途：特殊角色名稱

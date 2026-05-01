@@ -119,6 +119,7 @@ const conversationOrchestratorSchema = z.object({
 });
 
 type DiscussionStage = "clarifying" | "exploring" | "framing" | "wrapping";
+const ALLOWED_ROLE_TYPES = ["PM", "Researcher", "UX Designer", "Engineer"] as const;
 
 const chatRequestSchema = z.object({
   user_message: z.string().trim().min(1, "user_message is required").max(4000),
@@ -133,6 +134,17 @@ class ChatRouteError extends Error {
     this.name = "ChatRouteError";
     this.statusCode = statusCode;
   }
+}
+
+function normalizeRoleType(value: string): (typeof ALLOWED_ROLE_TYPES)[number] {
+  const normalized = value.trim().toLowerCase();
+
+  if (normalized === "pm" || normalized === "product manager") return "PM";
+  if (normalized === "researcher" || normalized === "ux strategist") return "Researcher";
+  if (normalized === "ux designer" || normalized === "ux" || normalized === "ui" || normalized === "ui designer") return "UX Designer";
+  if (normalized === "engineer" || normalized === "prototyper") return "Engineer";
+
+  return "Engineer";
 }
 
 function normalize(value: string): string {
@@ -388,7 +400,7 @@ function extractTeamMembersForChat(teamMemberPages: Array<Awaited<ReturnType<typ
       return {
         member_id: page.id,
         member_name: getTitleValue(properties, "member_name"),
-        role_type_ai: getSelectValue(properties, "role_type_ai"),
+        role_type_ai: normalizeRoleType(getSelectValue(properties, "role_type_ai")),
         custom_role_label_ai: getRichTextValue(properties, "custom_role_label_ai"),
         is_custom_role: getCheckboxValue(properties, "is_custom_role"),
         role_background_identity: getRichTextValue(properties, "role_background_identity"),

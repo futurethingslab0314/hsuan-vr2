@@ -12,7 +12,6 @@ const updateTeamMemberSchema = z.object({
   roleTarget: z.string().trim().min(1).max(4000),
   roleKnowledgeReference: z.string().trim().min(1).max(4000),
   roleRules: z.string().trim().min(1).max(4000),
-  roleWorkflow: z.string().trim().min(1).max(4000),
   roleResponseFormat: z.string().trim().min(1).max(4000),
   roleTone: z.string().trim().min(1).max(1000),
 });
@@ -82,7 +81,6 @@ export async function PATCH(
         role_target: buildRichTextProperty(payload.roleTarget),
         role_knowledge_reference: buildRichTextProperty(payload.roleKnowledgeReference),
         role_rules: buildRichTextProperty(payload.roleRules),
-        role_workflow: buildRichTextProperty(payload.roleWorkflow),
         role_response_format: buildRichTextProperty(payload.roleResponseFormat),
         role_tone: buildRichTextProperty(payload.roleTone),
       },
@@ -97,7 +95,6 @@ export async function PATCH(
         role_target: payload.roleTarget,
         role_knowledge_reference: payload.roleKnowledgeReference,
         role_rules: payload.roleRules,
-        role_workflow: payload.roleWorkflow,
         role_response_format: payload.roleResponseFormat,
         role_tone: payload.roleTone,
       },
