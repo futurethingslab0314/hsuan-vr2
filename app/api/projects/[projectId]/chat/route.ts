@@ -463,8 +463,10 @@ async function runConversationOrchestrator(input: ConversationOrchestratorInput)
               "You are Conversation Orchestrator for AI Team Builder.",
               "Your job is to coordinate a small AI team discussion.",
               "Return only valid structured output.",
-              "Select at most 2 speakers.",
-              "If tagged_members is not empty, prioritize them.",
+              "Select at most 2 speakers when tagged_members is empty.",
+              "If tagged_members is not empty, return exactly 1 selected speaker.",
+              "If tagged_members is not empty, the selected speaker must be one of the tagged members.",
+              "If tagged_members is not empty, return exactly 1 response.",
               "Responses must reflect each member's role, expertise, workflow, tone, and constraints.",
               "The second speaker should add support, challenge, tradeoff, implementation, or validation perspective instead of repeating the first.",
               "system_summary should summarize the current discussion state clearly.",
@@ -498,20 +500,61 @@ async function runConversationOrchestrator(input: ConversationOrchestratorInput)
     throw new ChatRouteError("Conversation Orchestrator returned no structured output", 500);
   }
 
+  const taggedMemberIds = new Set(input.tagged_members);
+  const hasTaggedMembers = taggedMemberIds.size > 0;
+
   const selectedMembers =
     parsed.selected_speakers.length > 0
       ? input.members.filter((member) => parsed.selected_speakers.includes(member.member_id))
       : [];
 
-  const fallbackResponses =
-    parsed.responses.length > 0
-      ? parsed.responses
-      : selectedMembers.slice(0, 2).map((member) => ({
-          member_id: member.member_id,
-          member_name: member.member_name,
-          role_type_ai: member.role_type_ai,
-          content: `${member.member_name} 正在從 ${member.role_type_ai} 的角度回應「${input.user_message}」。`,
-        }));
+  const fallbackResponses = selectedMembers.slice(0, 2).map((member) => ({
+    member_id: member.member_id,
+    member_name: member.member_name,
+    role_type_ai: member.role_type_ai,
+    content: `${member.member_name} 正在從 ${member.role_type_ai} 的角度回應「${input.user_message}」。`,
+  }));
+
+  const filteredSelectedSpeakers = hasTaggedMembers
+    ? parsed.selected_speakers.filter((memberId) => taggedMemberIds.has(memberId)).slice(0, 1)
+    : parsed.selected_speakers.slice(0, 2);
+
+  const filteredResponses = hasTaggedMembers
+    ? parsed.responses.filter((item) => taggedMemberIds.has(item.member_id)).slice(0, 1)
+    : parsed.responses.slice(0, 2);
+
+  const fallbackTaggedMember = hasTaggedMembers
+    ? input.members.find((member) => taggedMemberIds.has(member.member_id))
+    : undefined;
+
+  const finalSelectedSpeakers = hasTaggedMembers
+    ? (
+        filteredSelectedSpeakers.length > 0
+          ? filteredSelectedSpeakers
+          : fallbackTaggedMember
+            ? [fallbackTaggedMember.member_id]
+            : []
+      )
+    : filteredSelectedSpeakers;
+
+  const finalResponses = hasTaggedMembers
+    ? (
+        filteredResponses.length > 0
+          ? filteredResponses
+          : fallbackTaggedMember
+            ? [
+                {
+                  member_id: fallbackTaggedMember.member_id,
+                  member_name: fallbackTaggedMember.member_name,
+                  role_type_ai: fallbackTaggedMember.role_type_ai,
+                  content: `${fallbackTaggedMember.member_name} 正在從 ${fallbackTaggedMember.role_type_ai} 的角度回應這個問題。`,
+                },
+              ]
+            : []
+      )
+    : (
+        filteredResponses.length > 0 ? filteredResponses : fallbackResponses
+      );
 
   const nextDiscussionStage = determineDiscussionStage({
     currentStage: input.decision_state.discussion_stage_ai,
@@ -529,8 +572,8 @@ async function runConversationOrchestrator(input: ConversationOrchestratorInput)
   return {
     message_type: parsed.message_type,
     discussion_stage: nextDiscussionStage,
-    selected_speakers: parsed.selected_speakers,
-    responses: fallbackResponses,
+    selected_speakers: finalSelectedSpeakers,
+    responses: finalResponses,
     system_summary: parsed.system_summary,
     discussion_state_update: parsed.discussion_state_update,
     ready_for_report: readyForReport || parsed.ready_for_report,

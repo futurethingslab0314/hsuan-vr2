@@ -182,14 +182,7 @@ export default function App() {
         type: 'bot',
       }));
 
-      const summaryMessage: ChatMessage = {
-        role: 'System',
-        name: 'System Summary',
-        content: data.system_summary,
-        type: 'bot',
-      };
-
-      setMessages((prev) => [...prev, ...botMessages, summaryMessage]);
+      setMessages((prev) => [...prev, ...botMessages]);
     } catch (error) {
       console.error('[handleSendMessage]', error);
       const message = error instanceof Error ? error.message : 'Unknown error';
