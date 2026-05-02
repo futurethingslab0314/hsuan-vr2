@@ -31,13 +31,13 @@ export const ChatView = ({
   chatEndRef,
 }: ChatViewProps) => {
   return (
-    <motion.div key="chat" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="fixed inset-0 pt-24 pb-32 flex flex-col max-w-4xl mx-auto">
-      <div className="px-8 py-4 flex items-center justify-between border-b border-black/5 mb-4">
+    <motion.div key="chat" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="fixed inset-0 pt-8 pb-8 flex flex-col max-w-4xl mx-auto">
+      <div className="px-8 py-5 flex items-center justify-between border-b border-black/5 mb-4 min-h-[92px]">
         <div><h2 className="text-xl font-display font-bold">Team Collaboration</h2><p className="text-xs text-[#86868B]">Active Session: {inputValue || 'New Project'}</p></div>
         <div className="flex -space-x-2">{members.map(m => (<div key={m.id} className="w-8 h-8 rounded-full bg-black border-2 border-white flex items-center justify-center text-[10px] text-white font-bold" title={m.role}>{m.name.charAt(0)}</div>))}</div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-8 space-y-6 scrollbar-hide">
+      <div className="flex-1 overflow-y-auto px-8 pb-60 space-y-6 scrollbar-hide">
         {messages.length === 0 && (<div className="h-full flex flex-col items-center justify-center text-center space-y-4 opacity-40"><MessageSquare size={48} /><p className="text-sm font-medium">Your team is ready. Start the conversation below.</p></div>)}
         {messages.map((msg, i) => (
           <motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className={`flex flex-col ${msg.type === 'user' ? 'items-end' : 'items-start'}`}>
@@ -48,15 +48,17 @@ export const ChatView = ({
         <div ref={chatEndRef} />
       </div>
 
-      <div className="fixed bottom-12 left-1/2 -translate-x-1/2 w-full max-w-4xl px-8">
-        <div className="flex flex-wrap gap-2 mb-4 justify-center">{members.map(m => (<motion.button key={m.id} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={() => handleAddMemberToInput(m.name)} className="px-3 py-1.5 bg-white border border-black/5 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-sm hover:bg-black hover:text-white transition-colors">{m.role}</motion.button>))}</div>
-        <div className="relative glass p-2 rounded-full shadow-2xl border border-black/5">
-          <input type="text" value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSendMessage()} placeholder="Message your AI team..." className="w-full bg-transparent px-6 py-3 outline-none text-sm" />
-          <button onClick={handleSendMessage} className="absolute right-2 top-2 bottom-2 aspect-square bg-black text-white rounded-full flex items-center justify-center hover:scale-105 active:scale-95 transition-all"><Send size={18} /></button>
-        </div>
-        <div className="flex justify-between mt-6">
-          <motion.button whileHover={{ x: -5 }} onClick={() => setView('map')} className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-[#86868B] hover:text-black transition-colors"><ArrowLeft size={16} /> Back to Map</motion.button>
-          <motion.button whileHover={{ x: isGeneratingPlan ? 0 : 5 }} onClick={handleGeneratePlan} disabled={isGeneratingPlan} className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-black hover:opacity-70 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed">{isGeneratingPlan ? 'Generating Plan...' : 'Generate Plan'} <ChevronRight size={16} /></motion.button>
+      <div className="fixed bottom-8 left-1/2 -translate-x-1/2 w-full max-w-4xl px-8 z-20">
+        <div className="rounded-[28px] bg-[#F5F5F7]/92 backdrop-blur-md px-2 pt-2 pb-4">
+          <div className="flex flex-wrap gap-2 mb-3 justify-center">{members.map(m => (<motion.button key={m.id} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={() => handleAddMemberToInput(m.name)} className="px-3 py-1.5 bg-white border border-black/5 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-sm hover:bg-black hover:text-white transition-colors">{m.role}</motion.button>))}</div>
+          <div className="relative glass p-2 rounded-full shadow-2xl border border-black/5">
+            <input type="text" value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSendMessage()} placeholder="Message your AI team..." className="w-full bg-transparent px-6 py-3 outline-none text-sm" />
+            <button onClick={handleSendMessage} className="absolute right-2 top-2 bottom-2 aspect-square bg-black text-white rounded-full flex items-center justify-center hover:scale-105 active:scale-95 transition-all"><Send size={18} /></button>
+          </div>
+          <div className="flex justify-between mt-5 px-2">
+            <motion.button whileHover={{ x: -5 }} onClick={() => setView('map')} className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-[#86868B] hover:text-black transition-colors"><ArrowLeft size={16} /> Back to Map</motion.button>
+            <motion.button whileHover={{ x: isGeneratingPlan ? 0 : 5 }} onClick={handleGeneratePlan} disabled={isGeneratingPlan} className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-black hover:opacity-70 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed">{isGeneratingPlan ? 'Generating Plan...' : 'Generate Plan'} <ChevronRight size={16} /></motion.button>
+          </div>
         </div>
       </div>
     </motion.div>
