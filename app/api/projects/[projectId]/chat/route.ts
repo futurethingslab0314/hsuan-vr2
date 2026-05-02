@@ -119,7 +119,6 @@ const conversationOrchestratorSchema = z.object({
 });
 
 type DiscussionStage = "clarifying" | "exploring" | "framing" | "wrapping";
-const ALLOWED_ROLE_TYPES = ["PM", "Researcher", "UX Designer", "Engineer"] as const;
 
 const chatRequestSchema = z.object({
   user_message: z.string().trim().min(1, "user_message is required").max(4000),
@@ -136,7 +135,7 @@ class ChatRouteError extends Error {
   }
 }
 
-function normalizeRoleType(value: string): (typeof ALLOWED_ROLE_TYPES)[number] {
+function normalizeRoleType(value: string): "PM" | "Researcher" | "UX Designer" | "Engineer" {
   const normalized = value.trim().toLowerCase();
 
   if (normalized === "pm" || normalized === "product manager") return "PM";

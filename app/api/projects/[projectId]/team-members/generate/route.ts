@@ -18,6 +18,8 @@ type NotionCreatePageProperties = NonNullable<Parameters<typeof notion.pages.cre
 
 type ProjectForTeamGeneration = {
   project: string;
+  input_prompt_user: string;
+  input_prompt_goal_user: string;
   currentstage_user: string;
   project_summary_ai: string;
   problem_statement_ai: string;
@@ -51,6 +53,8 @@ type RoleTemplate = {
 };
 
 type TeamComposerInput = {
+  original_prompt: string;
+  project_goal: string;
   project_summary: string;
   problem_statement: string;
   target_users: string[];
@@ -78,6 +82,26 @@ type TeamComposerInput = {
   }>;
 };
 
+type TeamComposerModelMember = {
+  template_name: string;
+  role_key: string;
+  custom_role_label: string | null;
+  is_custom_role: boolean;
+  background_identity_focus: string;
+  task_focus: string[];
+  knowledge: string[];
+  rules_focus: string;
+  workflow: string;
+  response_format_focus: string;
+  why_this_role: string;
+  routing_hints: {
+    good_for: string[];
+    avoid_for: string[];
+    pairs_well_with: string[];
+  };
+  display_order: number;
+};
+
 type TeamComposerMember = {
   template_name: string;
   role_key: string;
@@ -103,39 +127,10 @@ type TeamComposerMember = {
 
 type TeamComposerResult = {
   team_rationale: string;
-  members: TeamComposerMember[];
+  members: TeamComposerModelMember[];
 };
 
-const teamComposerMemberSchema = z.object({
-  template_name: z.string(),
-  role_key: z.string(),
-  name: z.string(),
-  role_type: z.enum(["PM", "Researcher", "UX Designer", "Engineer"]),
-  custom_role_label: z.string().nullable(),
-  is_custom_role: z.boolean(),
-  background_identity: z.string(),
-  tasks: z.array(z.string()).min(1),
-  knowledge: z.array(z.string()).min(1),
-  rules: z.string(),
-  workflow: z.string(),
-  response_format: z.string(),
-  tone: z.string(),
-  why_this_role: z.string(),
-  routing_hints: z.object({
-    good_for: z.array(z.string()),
-    avoid_for: z.array(z.string()),
-    pairs_well_with: z.array(z.string()),
-  }),
-  display_order: z.number().int().min(1).max(4),
-});
-
-const teamComposerResultSchema = z.object({
-  team_rationale: z.string(),
-  members: z.array(teamComposerMemberSchema).length(4),
-});
-
-const ALLOWED_ROLE_TYPES = ["PM", "Researcher", "UX Designer", "Engineer"] as const;
-type AllowedRoleType = (typeof ALLOWED_ROLE_TYPES)[number];
+type AllowedRoleType = "PM" | "Researcher" | "UX Designer" | "Engineer";
 
 class TeamGenerationRouteError extends Error {
   statusCode: number;
@@ -158,8 +153,112 @@ function normalizeRoleType(value: string): AllowedRoleType {
   throw new TeamGenerationRouteError(`Unsupported role_type_ai value: ${value}`, 400);
 }
 
+const ROLE_NAME_POOL = {
+  pm: ["Maya Chen", "Olivia Lin", "Emma Wang", "Sophia Wu"],
+  researcher: ["Alex Lin", "Ethan Chang", "Noah Liu", "Daniel Hsu"],
+  ux: ["Sarah Miller", "Chloe Chen", "Grace Lee", "Hannah Lin"],
+  engineer: ["David Wu", "Ryan Chen", "Kevin Lin", "Jason Huang"],
+} as const;
+
 function normalize(value: string): string {
   return value.trim().toLowerCase().replace(/[\s-]+/g, "_");
+}
+
+function normalizeRoleKey(value: string): "pm" | "researcher" | "ux" | "engineer" {
+  const normalized = normalize(value);
+
+  if (normalized === "pm") return "pm";
+  if (normalized === "researcher") return "researcher";
+  if (normalized === "ux" || normalized === "ux_designer" || normalized === "ui") return "ux";
+  if (normalized === "engineer") return "engineer";
+
+  throw new TeamGenerationRouteError(`Unsupported role_key value: ${value}`, 400);
+}
+
+function hashString(value: string): number {
+  let hash = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    hash = (hash * 31 + value.charCodeAt(i)) >>> 0;
+  }
+  return hash;
+}
+
+function pickEnglishName(roleKey: string, projectId: string): string {
+  const normalizedRoleKey = normalizeRoleKey(roleKey);
+  const pool = ROLE_NAME_POOL[normalizedRoleKey];
+  const index = hashString(`${projectId}:${normalizedRoleKey}`) % pool.length;
+  return pool[index];
+}
+
+function buildTeamComposerResultSchema(roleTemplates: RoleTemplate[]) {
+  const templateNames = roleTemplates.map((template) => template.template_name.trim());
+  const roleKeys = roleTemplates.map((template) => normalizeRoleKey(template.role_key));
+
+  if (templateNames.length !== 4 || roleKeys.length !== 4) {
+    throw new TeamGenerationRouteError("Role templates are incomplete for current project stage", 400);
+  }
+
+  return z.object({
+    team_rationale: z.string(),
+    members: z.array(
+      z.object({
+        template_name: z.enum([
+          templateNames[0],
+          templateNames[1],
+          templateNames[2],
+          templateNames[3],
+        ] as [string, string, string, string]),
+        role_key: z.enum([
+          roleKeys[0],
+          roleKeys[1],
+          roleKeys[2],
+          roleKeys[3],
+        ] as ["pm" | "researcher" | "ux" | "engineer", "pm" | "researcher" | "ux" | "engineer", "pm" | "researcher" | "ux" | "engineer", "pm" | "researcher" | "ux" | "engineer"]),
+        custom_role_label: z.string().nullable(),
+        is_custom_role: z.boolean(),
+        background_identity_focus: z.string(),
+        task_focus: z.array(z.string()).min(1).max(3),
+        knowledge: z.array(z.string()).min(1),
+        rules_focus: z.string(),
+        workflow: z.string(),
+        response_format_focus: z.string(),
+        why_this_role: z.string(),
+        routing_hints: z.object({
+          good_for: z.array(z.string()),
+          avoid_for: z.array(z.string()),
+          pairs_well_with: z.array(z.string()),
+        }),
+        display_order: z.number().int().min(1).max(4),
+      })
+    ).length(4),
+  });
+}
+
+function buildBackgroundIdentityFromTemplate(template: RoleTemplate, backgroundIdentityFocus: string): string {
+  const base = [template.role_display_name, template.base_tone, template.base_behavior]
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .join("。");
+
+  if (!backgroundIdentityFocus.trim()) return base;
+  return `${base}\n\n本專案聚焦：${backgroundIdentityFocus.trim()}`;
+}
+
+function buildRoleTargetFromTemplate(template: RoleTemplate, taskFocus: string[]): string[] {
+  const focusLines = taskFocus.map((item) => item.trim()).filter(Boolean).map((item) => `專案聚焦：${item}`);
+  return [template.base_tasks.trim(), ...focusLines].filter(Boolean);
+}
+
+function buildRoleRulesFromTemplate(template: RoleTemplate, rulesFocus: string): string {
+  const base = template.base_rules.trim();
+  if (!rulesFocus.trim()) return base;
+  return `${base}\n\n本專案補充原則：${rulesFocus.trim()}`;
+}
+
+function buildRoleResponseFormatFromTemplate(template: RoleTemplate, responseFormatFocus: string): string {
+  const base = template.base_response_style.trim();
+  if (!responseFormatFocus.trim()) return base;
+  return `${base}\n\n本專案輸出聚焦：${responseFormatFocus.trim()}`;
 }
 
 function splitLines(value: string): string[] {
@@ -265,6 +364,8 @@ function extractProjectForTeamGeneration(projectPage: Awaited<ReturnType<typeof 
 
   const properties = projectPage.properties as Record<string, DbProperty>;
   const projectPropertyName = findPropertyName(properties, ["project"], "title") ?? findPropertyName(properties, ["project"], "rich_text");
+  const inputPromptUserPropertyName = findPropertyName(properties, ["input_prompt_user"], "rich_text");
+  const inputPromptGoalUserPropertyName = findPropertyName(properties, ["input_prompt_goal_user"], "rich_text");
   const currentStageUserPropertyName = findPropertyName(properties, ["currentstage_user"], "select");
   const projectSummaryPropertyName = findPropertyName(properties, ["project_summary_ai"], "rich_text");
   const problemStatementPropertyName = findPropertyName(properties, ["problem_statement_ai"], "rich_text");
@@ -275,6 +376,8 @@ function extractProjectForTeamGeneration(projectPage: Awaited<ReturnType<typeof 
 
   return {
     project: getTitleValue(properties, projectPropertyName) || getRichTextValue(properties, projectPropertyName),
+    input_prompt_user: getRichTextValue(properties, inputPromptUserPropertyName),
+    input_prompt_goal_user: getRichTextValue(properties, inputPromptGoalUserPropertyName),
     currentstage_user: getSelectValue(properties, currentStageUserPropertyName),
     project_summary_ai: getRichTextValue(properties, projectSummaryPropertyName),
     problem_statement_ai: getRichTextValue(properties, problemStatementPropertyName),
@@ -409,6 +512,8 @@ function buildTeamComposerInput(
   roleTemplates: RoleTemplate[]
 ): TeamComposerInput {
   return {
+    original_prompt: projectData.input_prompt_user,
+    project_goal: projectData.input_prompt_goal_user,
     project_summary: projectData.project_summary_ai,
     problem_statement: projectData.problem_statement_ai,
     target_users: splitLines(projectData.target_users_ai),
@@ -443,6 +548,7 @@ async function runTeamComposerWithTemplates(
   roleTemplates: RoleTemplate[]
 ): Promise<TeamComposerResult> {
   const input = buildTeamComposerInput(projectData, stagePlaybook, roleTemplates);
+  const teamComposerResultSchema = buildTeamComposerResultSchema(roleTemplates);
 
   const response = await openai.responses.parse({
     model: "gpt-4o-2024-08-06",
@@ -460,10 +566,16 @@ async function runTeamComposerWithTemplates(
               "Return exactly 4 members.",
               "Each member must use one of the provided template_name values.",
               "Each member must use one of the provided role_key values.",
-              "Each member role_type must match the intended fixed role set: PM, Researcher, UX Designer, Engineer.",
               "Do not add extra roles.",
               "Do not remove any role.",
-              "Use the project analysis, stage playbook, and role template content to tailor tone, behavior, tasks, rules, workflow, and response format.",
+              "Do not output person names. The system will assign English names separately.",
+              "Do not rewrite the full template content.",
+              "For background_identity_focus, output only the project-specific addition to the template persona.",
+              "For task_focus, output only 1 to 3 project-specific emphasis points that will be appended to the template task skeleton.",
+              "For rules_focus, output only the project-specific addition to the template rules.",
+              "For response_format_focus, output only the project-specific addition to the template response style.",
+              "workflow can be project-specific, but should stay consistent with the stage collaboration logic.",
+              "Use both the raw user prompt and the analyzed project summary.",
               "All output must be written in Traditional Chinese used in Taiwan.",
               "Do not write English unless the user explicitly asks for English.",
               "Keep the stage persona logic strong and distinct.",
@@ -493,6 +605,44 @@ async function runTeamComposerWithTemplates(
   }
 
   return parsed satisfies TeamComposerResult;
+}
+
+function buildFinalTeamMembers(
+  projectId: string,
+  modelMembers: TeamComposerModelMember[],
+  roleTemplates: RoleTemplate[]
+): TeamComposerMember[] {
+  return modelMembers.map((member) => {
+    const normalizedMemberTemplateName = member.template_name.trim();
+    const normalizedMemberRoleKey = normalizeRoleKey(member.role_key);
+
+    const templateRecord =
+      roleTemplates.find((template) => template.template_name.trim() === normalizedMemberTemplateName) ??
+      roleTemplates.find((template) => normalizeRoleKey(template.role_key) === normalizedMemberRoleKey);
+
+    if (!templateRecord) {
+      throw new TeamGenerationRouteError("Generated member cannot be mapped to a role template", 500);
+    }
+
+    return {
+      template_name: templateRecord.template_name,
+      role_key: templateRecord.role_key,
+      name: pickEnglishName(templateRecord.role_key, projectId),
+      role_type: normalizeRoleType(templateRecord.role_type_ai),
+      custom_role_label: member.custom_role_label,
+      is_custom_role: member.is_custom_role,
+      background_identity: buildBackgroundIdentityFromTemplate(templateRecord, member.background_identity_focus),
+      tasks: buildRoleTargetFromTemplate(templateRecord, member.task_focus),
+      knowledge: member.knowledge,
+      rules: buildRoleRulesFromTemplate(templateRecord, member.rules_focus),
+      workflow: member.workflow,
+      response_format: buildRoleResponseFormatFromTemplate(templateRecord, member.response_format_focus),
+      tone: templateRecord.base_tone,
+      why_this_role: member.why_this_role,
+      routing_hints: member.routing_hints,
+      display_order: member.display_order,
+    };
+  });
 }
 
 async function listExistingTeamMembers(projectId: string) {
@@ -569,9 +719,12 @@ async function createTeamMembers(projectId: string, stageKey: string, members: T
   const createdMembers = [];
 
   for (const member of members) {
+    const normalizedMemberTemplateName = member.template_name.trim();
+    const normalizedMemberRoleKey = normalizeRoleKey(member.role_key);
+
     const templateRecord =
-      roleTemplates.find((template) => template.template_name === member.template_name) ??
-      roleTemplates.find((template) => normalize(template.role_key) === normalize(member.role_key));
+      roleTemplates.find((template) => template.template_name.trim() === normalizedMemberTemplateName) ??
+      roleTemplates.find((template) => normalizeRoleKey(template.role_key) === normalizedMemberRoleKey);
 
     if (!templateRecord) {
       throw new TeamGenerationRouteError("Generated member cannot be mapped to a role template", 500);
@@ -615,7 +768,8 @@ export async function POST(request: Request, context: { params: Promise<{ projec
     const roleTemplates = await listRoleTemplatesByStagePlaybookId(stagePlaybook.id);
 
     const teamComposerResult = await runTeamComposerWithTemplates(projectData, stagePlaybook, roleTemplates);
-    const createdMembers = await createTeamMembers(projectId, stageKey, teamComposerResult.members, roleTemplates);
+    const finalMembers = buildFinalTeamMembers(projectId, teamComposerResult.members, roleTemplates);
+    const createdMembers = await createTeamMembers(projectId, stageKey, finalMembers, roleTemplates);
 
     return NextResponse.json({ ok: true, project_id: projectId, members: createdMembers });
   } catch (error) {

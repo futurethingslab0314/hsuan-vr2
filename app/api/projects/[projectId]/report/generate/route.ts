@@ -68,8 +68,6 @@ type ReportGeneratorResult = {
   report_content: string;
 };
 
-const ALLOWED_ROLE_TYPES = ["PM", "Researcher", "UX Designer", "Engineer"] as const;
-
 const reportGeneratorSchema = z.object({
   report_title: z.string(),
   report_content: z.string(),
@@ -92,7 +90,7 @@ class ReportGenerationRouteError extends Error {
   }
 }
 
-function normalizeRoleType(value: string): (typeof ALLOWED_ROLE_TYPES)[number] {
+function normalizeRoleType(value: string): "PM" | "Researcher" | "UX Designer" | "Engineer" {
   const normalized = value.trim().toLowerCase();
 
   if (normalized === "pm" || normalized === "product manager") return "PM";
