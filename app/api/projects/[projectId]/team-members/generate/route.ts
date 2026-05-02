@@ -1,5 +1,8 @@
 ﻿import { NextResponse } from "next/server";
+import { z } from "zod";
+import { zodTextFormat } from "openai/helpers/zod";
 import { notion, getNotionDatabaseId } from "@/src/lib/notion";
+import { openai } from "@/src/lib/openai";
 
 type DbProperty = {
   id?: string;
@@ -76,6 +79,8 @@ type TeamComposerInput = {
 };
 
 type TeamComposerMember = {
+  template_name: string;
+  role_key: string;
   name: string;
   role_type: "PM" | "Researcher" | "UX Designer" | "Engineer";
   custom_role_label: string | null;
@@ -100,6 +105,34 @@ type TeamComposerResult = {
   team_rationale: string;
   members: TeamComposerMember[];
 };
+
+const teamComposerMemberSchema = z.object({
+  template_name: z.string(),
+  role_key: z.string(),
+  name: z.string(),
+  role_type: z.enum(["PM", "Researcher", "UX Designer", "Engineer"]),
+  custom_role_label: z.string().nullable(),
+  is_custom_role: z.boolean(),
+  background_identity: z.string(),
+  tasks: z.array(z.string()).min(1),
+  knowledge: z.array(z.string()).min(1),
+  rules: z.string(),
+  workflow: z.string(),
+  response_format: z.string(),
+  tone: z.string(),
+  why_this_role: z.string(),
+  routing_hints: z.object({
+    good_for: z.array(z.string()),
+    avoid_for: z.array(z.string()),
+    pairs_well_with: z.array(z.string()),
+  }),
+  display_order: z.number().int().min(1).max(4),
+});
+
+const teamComposerResultSchema = z.object({
+  team_rationale: z.string(),
+  members: z.array(teamComposerMemberSchema).length(4),
+});
 
 const ALLOWED_ROLE_TYPES = ["PM", "Researcher", "UX Designer", "Engineer"] as const;
 type AllowedRoleType = (typeof ALLOWED_ROLE_TYPES)[number];
@@ -354,9 +387,17 @@ async function listRoleTemplatesByStagePlaybookId(stagePlaybookId: string): Prom
     throw new TeamGenerationRouteError("Role templates are incomplete for current project stage", 400);
   }
 
-  const roleKeys = templates.map((template) => template.role_key).filter(Boolean);
+  const roleKeys = templates.map((template) => normalize(template.role_key)).filter(Boolean);
+  const requiredRoleKeys = ["pm", "researcher", "ux", "engineer"];
+
   if (new Set(roleKeys).size !== 4) {
     throw new TeamGenerationRouteError("Role templates are incomplete for current project stage", 400);
+  }
+
+  for (const requiredRoleKey of requiredRoleKeys) {
+    if (!roleKeys.includes(requiredRoleKey)) {
+      throw new TeamGenerationRouteError("Role templates are incomplete for current project stage", 400);
+    }
   }
 
   return templates.sort((a, b) => a.role_key.localeCompare(b.role_key));
@@ -402,98 +443,56 @@ async function runTeamComposerWithTemplates(
   roleTemplates: RoleTemplate[]
 ): Promise<TeamComposerResult> {
   const input = buildTeamComposerInput(projectData, stagePlaybook, roleTemplates);
-  const stageLabels: Record<string, string> = {
-    discover: "Discover",
-    define: "Define",
-    develop: "Develop",
-    deliver: "Deliver",
-  };
 
-  return {
-    team_rationale: `${projectData.project} 目前處於雙鑽石流程的 ${stageLabels[input.project_stage] ?? input.project_stage}，因此建議配置一組精簡且可協作的跨職能 AI 團隊。`,
-    members: [
+  const response = await openai.responses.parse({
+    model: "gpt-4o-2024-08-06",
+    input: [
       {
-        name: "Maya Chen",
-        role_type: "PM",
-        custom_role_label: null,
-        is_custom_role: false,
-        background_identity: "專注於研究洞察整理、決策框定與跨職能協作的產品策略角色。",
-        tasks: ["定義優先順序", "釐清決策標準", "維持團隊對階段目標的對齊"],
-        knowledge: ["研究洞察整理", "決策框定", "雙鑽石流程方法"],
-        rules: "優先提供清楚、可比較、可決策的內容。",
-        workflow: "先協助框定問題，再與 Researcher、UX Designer 和 Engineer 協作收斂方向。",
-        response_format: "決策摘要、選項比較與下一步建議。",
-        tone: "結構化、務實、具策略性。",
-        why_this_role: "這個角色能幫助團隊把分析結果轉成清楚的階段重點與決策方向。",
-        routing_hints: {
-          good_for: ["優先級判斷", "決策框定", "方向取捨"],
-          avoid_for: ["細部視覺設計", "低階技術除錯"],
-          pairs_well_with: ["Researcher", "Engineer"],
-        },
-        display_order: 1,
+        role: "system",
+        content: [
+          {
+            type: "input_text",
+            text: [
+              "You are Team Composer for AI Team Builder.",
+              "Your task is NOT to invent a new team from scratch.",
+              "Your task is to adapt exactly four provided stage-role templates into project-specific team members.",
+              "You must preserve the provided role set and map each generated member to one provided template.",
+              "Return exactly 4 members.",
+              "Each member must use one of the provided template_name values.",
+              "Each member must use one of the provided role_key values.",
+              "Each member role_type must match the intended fixed role set: PM, Researcher, UX Designer, Engineer.",
+              "Do not add extra roles.",
+              "Do not remove any role.",
+              "Use the project analysis, stage playbook, and role template content to tailor tone, behavior, tasks, rules, workflow, and response format.",
+              "All output must be written in Traditional Chinese used in Taiwan.",
+              "Do not write English unless the user explicitly asks for English.",
+              "Keep the stage persona logic strong and distinct.",
+            ].join("\n"),
+          },
+        ],
       },
       {
-        name: "Alex Lin",
-        role_type: "Researcher",
-        custom_role_label: null,
-        is_custom_role: false,
-        background_identity: "擅長問題定義、使用者洞察整理與行為分析的研究角色。",
-        tasks: ["詮釋使用者需求", "釐清目標使用者", "從使用者角度塑造解法方向"],
-        knowledge: ["JTBD", "使用者訪談洞察整理", "資訊架構"],
-        rules: "所有建議都應回到使用者情境與尚未解決的問題。",
-        workflow: "與 PM 一起驗證目標方向，並與 UX Designer、Engineer 合作確保洞察能轉為可執行方案。",
-        response_format: "使用者洞察摘要、機會點陳述與流程建議。",
-        tone: "好奇、分析型、以使用者為中心。",
-        why_this_role: "這個角色能確保團隊不是只回應系統輸出，而是真正回到使用者價值。",
-        routing_hints: {
-          good_for: ["使用者需求", "研究洞察", "問題框定"],
-          avoid_for: ["發版規劃", "後端架構"],
-          pairs_well_with: ["PM", "UX Designer"],
-        },
-        display_order: 2,
-      },
-      {
-        name: "Sarah Miller",
-        role_type: "UX Designer",
-        custom_role_label: null,
-        is_custom_role: false,
-        background_identity: "擅長互動流程、介面邏輯與體驗細節整合的 UX 設計角色。",
-        tasks: ["建立互動流程", "設計資訊架構", "確保介面與體驗的一致性"],
-        knowledge: ["資訊架構", "用戶流程設計", "互動設計原則"],
-        rules: "所有設計建議都應兼顧易用性、可理解性與整體體驗一致性。",
-        workflow: "在 PM 與 Researcher 釐清目標與洞察後，把方向轉成可體驗、可理解的設計方案。",
-        response_format: "用戶流程圖、互動動線腳本、設計規範。",
-        tone: "細膩、具設計感、以人為本。",
-        why_this_role: "這個角色能把抽象需求與洞察整理成可操作的體驗與介面策略。",
-        routing_hints: {
-          good_for: ["用戶流程", "互動體驗", "介面結構"],
-          avoid_for: ["低階技術架構", "單純商務談判"],
-          pairs_well_with: ["Researcher", "Engineer"],
-        },
-        display_order: 3,
-      },
-      {
-        name: "David Wu",
-        role_type: "Engineer",
-        custom_role_label: null,
-        is_custom_role: false,
-        background_identity: "具產品思維的工程角色，擅長評估技術可行性並把規劃轉成可落地的系統做法。",
-        tasks: ["辨識技術限制", "提出實作路徑", "降低交付風險"],
-        knowledge: ["系統設計", "API 整合", "前後端協作"],
-        rules: "所有建議都要可行、可分段推進，並考慮實作成本。",
-        workflow: "通常在 PM、Researcher 與 UX Designer 完成問題框定後，進一步把方向轉成具體的執行方案。",
-        response_format: "實作建議、技術取捨與交付安排。",
-        tone: "直接、務實、以解法為導向。",
-        why_this_role: "這個角色能把團隊討論拉回技術現實，避免停留在抽象規劃。",
-        routing_hints: {
-          good_for: ["技術可行性", "架構取捨", "實作排序"],
-          avoid_for: ["純品牌定位", "單獨使用者研究整理"],
-          pairs_well_with: ["PM", "UX Designer"],
-        },
-        display_order: 4,
+        role: "user",
+        content: [
+          {
+            type: "input_text",
+            text: JSON.stringify(input, null, 2),
+          },
+        ],
       },
     ],
-  };
+    text: {
+      format: zodTextFormat(teamComposerResultSchema, "team_composer_result"),
+    },
+  });
+
+  const parsed = response.output_parsed;
+
+  if (!parsed) {
+    throw new TeamGenerationRouteError("Team Composer returned no structured output", 500);
+  }
+
+  return parsed satisfies TeamComposerResult;
 }
 
 async function listExistingTeamMembers(projectId: string) {
@@ -526,7 +525,7 @@ function buildTeamMemberCreatePayload(
     member_name: buildTitleProperty(member.name),
     project: { relation: [{ id: projectId }] },
     role_template: { relation: [{ id: templateRecord.id }] },
-    role_type_ai: { select: { name: member.role_type } },
+    role_type_ai: { select: { name: templateRecord.role_type_ai } },
     custom_role_label_ai: buildRichTextProperty(member.custom_role_label ?? ""),
     is_custom_role: buildCheckboxProperty(member.is_custom_role),
     role_background_identity: buildRichTextProperty(member.background_identity),
@@ -570,7 +569,10 @@ async function createTeamMembers(projectId: string, stageKey: string, members: T
   const createdMembers = [];
 
   for (const member of members) {
-    const templateRecord = roleTemplates.find((template) => template.role_type_ai === member.role_type);
+    const templateRecord =
+      roleTemplates.find((template) => template.template_name === member.template_name) ??
+      roleTemplates.find((template) => normalize(template.role_key) === normalize(member.role_key));
+
     if (!templateRecord) {
       throw new TeamGenerationRouteError("Generated member cannot be mapped to a role template", 500);
     }
