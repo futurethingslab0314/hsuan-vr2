@@ -80,6 +80,281 @@ const REPORT_STAGE_LABELS: Record<string, string> = {
   deliver: "Deliver 交付階段",
 };
 
+const REPORT_COMMON_RULES = [
+  "你正在根據「本階段使用者與 AI persona 團隊的對話紀錄」生成階段報告。",
+  "請嚴格遵守以下規則：",
+  "1. 報告只能根據本階段對話紀錄、使用者明確輸入、AI persona 已提出的內容生成。",
+  "2. 不可以自行補完對話中沒有提到的決策、功能、技術細節、使用者洞察、數據、工時或風險等級。",
+  "3. 如果某個報告欄位在對話中沒有被討論，請不要生成假內容。",
+  "4. 未被討論的欄位請標示為：",
+  "   狀態：待釐清",
+  "   並簡短說明「本階段尚未討論此項目」。",
+  "5. 若該項目對本階段任務很重要，請補上：",
+  "   - 待補問問題",
+  "   - 建議詢問的 AI persona",
+  "   - 下一步行動",
+  "6. 若能根據對話做合理推論，必須明確標示：",
+  "   根據目前對話推測",
+  "   不可寫成已確認事實。",
+  "7. 請在主要段落開頭標示內容狀態：",
+  "   - 狀態：已討論",
+  "   - 狀態：已決策",
+  "   - 狀態：合理推測",
+  "   - 狀態：待釐清",
+  "狀態定義：",
+  "- 已討論：對話中明確提到，但未必形成決策。",
+  "- 已決策：使用者或團隊已明確選擇、刪除、排序、確認。",
+  "- 合理推測：可由對話內容推導，但尚未被明確確認。",
+  "- 待釐清：對話中資訊不足，不能生成結論。",
+  "如果某段落是待釐清，請使用以下格式：",
+  "## 欄位名稱",
+  "狀態：待釐清",
+  "本階段尚未討論此項目。",
+  "待補問問題：",
+  "- 問題 1",
+  "- 問題 2",
+  "- 問題 3",
+  "建議詢問：",
+  "- 建議詢問的 AI persona：",
+  "- 建議提問：",
+  "下一步行動：",
+  "- 行動內容：",
+].join("\n");
+
+const REPORT_STAGE_INSTRUCTIONS: Record<string, string> = {
+  discover: `
+你現在要生成一份「Discover 發散報告」。
+
+此階段的任務是理解脈絡、擴展可能性、看見更多使用情境、需求、情緒與初步服務可能。
+請不要進行功能刪減、MVP 選擇、可行性判斷或成本評估。
+即使對話中出現不成熟或不現實的想法，也請整理為「可能性」或「待後續驗證的想法」，不要直接否定。
+
+請使用繁體中文，語氣清楚、具設計研究感。
+
+請依照以下格式輸出：
+
+# Discover 發散報告
+
+## 1. 專案脈絡摘要
+請根據對話內容整理本階段討論到的背景脈絡。
+若對話中有提到，請包含：
+- 專案目標
+- 主要使用者
+- 系統可能包含的元素
+- 「取得藥品」被如何理解
+- 本階段主要探索的問題
+若以上內容未被討論，請不要補寫，改標示為待釐清。
+
+## 2. 使用情境整理
+請整理對話中實際出現的使用情境。
+每一種情境包含：
+- 情境名稱
+- 時間 / 觸發時刻
+- 場域
+- 使用者心理
+- 遇到的問題
+- 產品可能扮演的角色
+
+## 3. 使用者心理與情緒需求
+請整理對話中實際提到的心理或情緒需求。
+每一點請包含：
+- 心理 / 情緒需求
+- 對話依據
+- 對設計的啟示
+
+## 4. 可能的使用族群
+請整理對話中實際提到的使用族群。
+每個族群包含：
+- 族群描述
+- 主要困難
+- 可能需要的支援
+- 與產品的關係
+
+## 5. AI Persona 觀點整理
+請只整理對話中實際被使用或實際發言的 AI persona。
+每個角色請整理：
+- 該角色提出的觀點
+- 該觀點如何拓展問題空間
+- 對後續階段的價值
+
+## 6. 初步功能與服務可能性
+請整理對話中實際出現的初步功能或服務想法。
+請使用表格：
+| 初步功能 / 服務 | 對應需求 | 可能價值 | 待釐清問題 | 狀態 |
+|---|---|---|---|---|
+
+## 7. 仍未被理解的問題
+請根據本階段缺口整理問題。
+
+## 8. 帶往 Define 階段的材料
+請整理本階段已經產生、可帶往 Define 階段批判與收斂的材料。
+
+## 9. 一句話總結
+請用一句話總結本階段已完成的探索。
+`.trim(),
+
+  define: `
+你現在要生成一份「Define 決策報告」。
+
+此階段的任務是批判、排序、刪減與定義 MVP。
+請不要繼續大量發散新點子，也不要把所有功能都保留下來。
+報告必須清楚呈現：哪些功能被保留、哪些被延後、哪些被刪除，以及是否已經做出 2 個 MVP 功能的決策。
+
+請使用繁體中文，語氣理性、清楚、具決策紀錄感。
+
+請依照以下格式輸出：
+
+# Define 決策報告
+
+## 1. 本階段任務摘要
+
+## 2. 候選功能整理
+請使用表格：
+| 候選功能 | 對話中如何被討論 | 初步判斷 | 狀態 |
+|---|---|---|---|
+
+## 3. AI Persona 批判整理
+請只整理實際在對話中被詢問或有提供內容的 persona。
+
+## 4. 功能分類結果
+請使用表格：
+| 功能 | 分類：必須有 / 可以延後 / 應該刪除 / 尚未決定 | 判斷理由 | 主要風險 | 狀態 |
+|---|---|---|---|---|
+
+## 5. 最終 MVP 決策
+
+## 6. 核心問題定義
+
+## 7. 核心價值主張
+
+## 8. 延後發展的功能
+
+## 9. 刪除功能
+
+## 10. 主要使用者假設
+
+## 11. 技術與資料邊界
+
+## 12. 帶往 Develop 階段的問題
+
+## 13. 一句話總結
+`.trim(),
+
+  develop: `
+你現在要生成一份「Develop 方案報告」。
+
+此階段的任務是將已選定的 MVP 轉化為可以被設計、開發與測試的方案。
+請不要重新發想大型新功能，也不要回到 Discover 式的發散。
+請將對話中已討論的內容拆成模組、流程、動作、資料與技術邏輯。
+
+請使用繁體中文，語氣結構化、具產品方案與系統規格感。
+
+請依照以下格式輸出：
+
+# Develop 方案報告
+
+## 1. 本階段任務摘要
+
+## 2. AI Persona 方案整理
+
+## 3. P0 / P1 / P2 功能模組
+請使用表格：
+| 優先級 | 功能模組 | 對應 MVP | 使用者動作 | 系統反應 | 狀態 |
+|---|---|---|---|---|---|
+
+## 4. 基礎層 / 互動層 / 內容層架構
+請使用表格：
+| 層級 | 已討論內容 | 待釐清內容 | 狀態 |
+|---|---|---|---|
+
+## 5. 使用者操作腳本
+
+## 6. 硬體與軟體分工
+請使用表格：
+| 系統部分 | 負責功能 | 輸入資料 | 輸出回饋 | 狀態 |
+|---|---|---|---|---|
+
+## 7. 醫院資料串接流程
+
+## 8. 錯誤處理流程
+請使用表格：
+| 錯誤情境 | 可能原因 | 使用者風險 | 系統處理 | 是否需要人工介入 | 狀態 |
+|---|---|---|---|---|---|
+
+## 9. 下一階段 Deliver 要驗收的項目
+
+## 10. 一句話總結
+`.trim(),
+
+  deliver: `
+你現在要生成一份「Deliver 交付報告」。
+
+此階段的任務是最終刪減、確認交付範圍、整理產品規格與驗收清單。
+請不要再發散新功能，也不要讓所有功能都保留。
+報告必須清楚呈現哪些功能納入本版、哪些延至下一版本、哪些直接刪除，以及為什麼。
+
+請使用繁體中文，語氣務實、精確，接近產品交付文件。
+
+請特別注意：
+- 不可自行編造工時。
+- 不可自行編造風險等級。
+- 不可自行替受測者決定功能去留。
+- 若 Engineer 沒有提供工時，請標示「需補工程估時」。
+- 若 PM 沒有明確刪減功能，請標示「交付範圍尚未完成收斂」。
+
+請依照以下格式輸出：
+
+# Deliver 交付報告
+
+## 1. 本階段任務摘要
+
+## 2. 原始功能狀態盤點
+請使用表格：
+| 功能 | 對話中提到的狀態 | 初步風險 | 狀態 |
+|---|---|---|---|
+
+## 3. AI Persona 最終評估整理
+
+## 4. 最終功能決策
+請使用表格：
+| 功能 | 決策：本版 / 下一版本 / 刪除 / 尚未決定 | 決策理由 | 風險等級 | 狀態 |
+|---|---|---|---|---|
+
+## 5. 本版功能清單
+
+## 6. 下一版本功能清單
+
+## 7. 刪除功能清單
+
+## 8. 開發工時估算
+請使用表格：
+| 功能 / 工作項目 | 預估工時 | 估算依據 | 狀態 |
+|---|---|---|---|
+
+## 9. 技術風險等級
+請使用表格：
+| 風險項目 | 風險等級 | 原因 | 降低風險方式 | 狀態 |
+|---|---|---|---|---|
+
+## 10. 高齡友善使用檢查
+
+## 11. 醫療資料與隱私檢查
+
+## 12. 藥品確認測試情境
+請使用表格：
+| 測試情境 | 預期系統反應 | 未通過風險 | 狀態 |
+|---|---|---|---|
+
+## 13. 提醒語與錯誤訊息規範
+
+## 14. 產品責任邊界
+
+## 15. 上線前阻斷條件
+
+## 16. 最終交付結論
+`.trim(),
+};
+
 class ReportGenerationRouteError extends Error {
   statusCode: number;
 
@@ -106,6 +381,10 @@ function splitLines(value: string): string[] {
     .split("\n")
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function getReportStageInstruction(stage: string) {
+  return REPORT_STAGE_INSTRUCTIONS[stage] ?? REPORT_STAGE_INSTRUCTIONS.define;
 }
 
 function getRichTextValue(properties: Record<string, DbProperty>, propertyName: string | undefined): string {
@@ -263,6 +542,8 @@ function buildReportGeneratorInput(projectData: ProjectForReport, members: TeamM
 }
 
 async function runReportGenerator(input: ReportGeneratorInput): Promise<ReportGeneratorResult> {
+  const stageInstruction = getReportStageInstruction(input.project_stage);
+
   const response = await openai.responses.parse({
     model: "gpt-4o-2024-08-06",
     input: [
@@ -273,18 +554,20 @@ async function runReportGenerator(input: ReportGeneratorInput): Promise<ReportGe
             type: "input_text",
             text: [
               "You are Report Generator for AI Team Builder.",
-              "Your job is to create a concise one-page product strategy report.",
               "Return only valid structured output.",
               "The report must be readable as plain text.",
               "The report content should be structured with clear section headings.",
-              "Focus on summary, decisions, assumptions, and next steps.",
               "Do not repeat the entire chat transcript verbatim.",
-              "If information is uncertain, label it as assumption or open question.",
-              "Project stages are: discover, define, develop, deliver.",
               "All output content must be written in Traditional Chinese used in Taiwan.",
               "Do not reply in English unless the user explicitly asks for English.",
               "report_title and report_content must both be written in Traditional Chinese.",
-              "Use a concise Chinese report title suitable for a project plan or strategy summary.",
+              "Use a concise Chinese report title suitable for a staged project report.",
+              "",
+              "以下是報告生成共用規則：",
+              REPORT_COMMON_RULES,
+              "",
+              "以下是本階段報告生成規則：",
+              stageInstruction,
             ].join("\n"),
           },
         ],
