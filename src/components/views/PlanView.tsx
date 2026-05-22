@@ -33,7 +33,24 @@ export const PlanView = ({ setView, reportNumber, reportContent, isGeneratingPla
         </div>
 
         {isGeneratingPlan ? (
-          <div className="py-12 text-sm text-[#86868B]">Generating your one-page report...</div>
+          <div className="py-12 flex flex-col items-center gap-4 text-sm text-[#86868B]">
+            <div className="flex items-center gap-2">
+              {[0, 1, 2].map((index) => (
+                <motion.span
+                  key={index}
+                  className="w-3 h-3 rounded-full bg-black/70"
+                  animate={{ y: [0, -5, 0], opacity: [0.35, 1, 0.35] }}
+                  transition={{
+                    duration: 0.8,
+                    repeat: Infinity,
+                    ease: 'easeInOut',
+                    delay: index * 0.12,
+                  }}
+                />
+              ))}
+            </div>
+            <div>Generating your one-page report...</div>
+          </div>
         ) : content ? (
           <pre className="text-left whitespace-pre-wrap text-sm leading-7 bg-white/70 border border-black/5 rounded-3xl p-8 shadow-inner">
             {content}

@@ -107,8 +107,8 @@ const conversationOrchestratorSchema = z.object({
     "validation",
     "wrap_up",
   ]),
-  selected_speakers: z.array(z.string()).max(2),
-  responses: z.array(conversationResponseSchema).max(2),
+  selected_speakers: z.array(z.string()).max(4),
+  responses: z.array(conversationResponseSchema).max(4),
   system_summary: z.string(),
   discussion_state_update: z.object({
     confirmed_points: z.array(z.string()),
@@ -464,9 +464,10 @@ async function runConversationOrchestrator(input: ConversationOrchestratorInput)
               "Your job is to coordinate a small AI team discussion.",
               "Return only valid structured output.",
               "Select at most 2 speakers when tagged_members is empty.",
-              "If tagged_members is not empty, return exactly 1 selected speaker.",
-              "If tagged_members is not empty, the selected speaker must be one of the tagged members.",
-              "If tagged_members is not empty, return exactly 1 response.",
+              "If tagged_members is not empty, return responses only from tagged members.",
+              "If tagged_members is not empty, selected_speakers must match the tagged members who respond.",
+              "If tagged_members is not empty, return one response for each tagged member that should answer.",
+              "If tagged_members is not empty, do not add untagged speakers.",
               "Responses must reflect each member's role, expertise, workflow, tone, and constraints.",
               "The second speaker should add support, challenge, tradeoff, implementation, or validation perspective instead of repeating the first.",
               "system_summary should summarize the current discussion state clearly.",
@@ -516,24 +517,22 @@ async function runConversationOrchestrator(input: ConversationOrchestratorInput)
   }));
 
   const filteredSelectedSpeakers = hasTaggedMembers
-    ? parsed.selected_speakers.filter((memberId) => taggedMemberIds.has(memberId)).slice(0, 1)
+    ? parsed.selected_speakers.filter((memberId) => taggedMemberIds.has(memberId))
     : parsed.selected_speakers.slice(0, 2);
 
   const filteredResponses = hasTaggedMembers
-    ? parsed.responses.filter((item) => taggedMemberIds.has(item.member_id)).slice(0, 1)
+    ? parsed.responses.filter((item) => taggedMemberIds.has(item.member_id))
     : parsed.responses.slice(0, 2);
 
-  const fallbackTaggedMember = hasTaggedMembers
-    ? input.members.find((member) => taggedMemberIds.has(member.member_id))
-    : undefined;
+  const fallbackTaggedMembers = hasTaggedMembers
+    ? input.members.filter((member) => taggedMemberIds.has(member.member_id))
+    : [];
 
   const finalSelectedSpeakers = hasTaggedMembers
     ? (
         filteredSelectedSpeakers.length > 0
           ? filteredSelectedSpeakers
-          : fallbackTaggedMember
-            ? [fallbackTaggedMember.member_id]
-            : []
+          : fallbackTaggedMembers.map((member) => member.member_id)
       )
     : filteredSelectedSpeakers;
 
@@ -541,16 +540,12 @@ async function runConversationOrchestrator(input: ConversationOrchestratorInput)
     ? (
         filteredResponses.length > 0
           ? filteredResponses
-          : fallbackTaggedMember
-            ? [
-                {
-                  member_id: fallbackTaggedMember.member_id,
-                  member_name: fallbackTaggedMember.member_name,
-                  role_type_ai: fallbackTaggedMember.role_type_ai,
-                  content: `${fallbackTaggedMember.member_name} 正在從 ${fallbackTaggedMember.role_type_ai} 的角度回應這個問題。`,
-                },
-              ]
-            : []
+          : fallbackTaggedMembers.map((member) => ({
+              member_id: member.member_id,
+              member_name: member.member_name,
+              role_type_ai: member.role_type_ai,
+              content: `${member.member_name} 正在從 ${member.role_type_ai} 的角度回應這個問題。`,
+            }))
       )
     : (
         filteredResponses.length > 0 ? filteredResponses : fallbackResponses

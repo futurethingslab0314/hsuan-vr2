@@ -100,6 +100,7 @@ export default function App() {
   const [tempMember, setTempMember] = useState<TeamMember | null>(null);
   const [projectId, setProjectId] = useState<string | null>(null);
   const [isCreatingProject, setIsCreatingProject] = useState(false);
+  const [isChatResponding, setIsChatResponding] = useState(false);
   const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
   const [report, setReport] = useState<GeneratedReport | null>(null);
   const [isSignInModalOpen, setIsSignInModalOpen] = useState(false);
@@ -151,13 +152,14 @@ export default function App() {
   };
 
   const handleSendMessage = async () => {
-    if (!chatInput.trim() || !projectId) return;
+    if (!chatInput.trim() || !projectId || isChatResponding) return;
 
     const currentMessage = chatInput.trim();
     const taggedMembers = extractTaggedMemberIds(currentMessage, members);
     const newUserMessage: ChatMessage = { role: 'User', name: 'You', content: currentMessage, type: 'user' };
     setMessages((prev) => [...prev, newUserMessage]);
     setChatInput('');
+    setIsChatResponding(true);
 
     try {
       const response = await fetch(`/api/projects/${projectId}/chat`, {
@@ -187,6 +189,8 @@ export default function App() {
       console.error('[handleSendMessage]', error);
       const message = error instanceof Error ? error.message : 'Unknown error';
       alert(`對話處理失敗: ${message}`);
+    } finally {
+      setIsChatResponding(false);
     }
   };
 
@@ -342,7 +346,7 @@ export default function App() {
         {view === 'home' && <HomeView projectRequirements={projectRequirements} setProjectRequirements={setProjectRequirements} designGoals={designGoals} setDesignGoals={setDesignGoals} currentPhase={currentPhase} setCurrentPhase={setCurrentPhase} isFocused={isFocused} setIsFocused={setIsFocused} handleStartAnalysis={handleStartAnalysis} />}
         {view === 'loading' && <LoadingView />}
         {view === 'map' && <MapView members={members} selectedMemberId={selectedMemberId} setSelectedMemberId={handleSelectMember} tempMember={tempMember} setTempMember={setTempMember} handleSaveMember={handleSaveMember} inputValue={projectRequirements} setView={(nextView) => setView(nextView)} />}
-        {view === 'chat' && <ChatView messages={messages} members={members} chatInput={chatInput} setChatInput={setChatInput} handleSendMessage={handleSendMessage} handleAddMemberToInput={handleAddMemberToInput} setView={setView} handleGeneratePlan={handleGeneratePlan} isGeneratingPlan={isGeneratingPlan} inputValue={projectRequirements} chatEndRef={chatEndRef} />}
+        {view === 'chat' && <ChatView messages={messages} members={members} chatInput={chatInput} setChatInput={setChatInput} handleSendMessage={handleSendMessage} handleAddMemberToInput={handleAddMemberToInput} setView={setView} handleGeneratePlan={handleGeneratePlan} isGeneratingPlan={isGeneratingPlan} isChatResponding={isChatResponding} inputValue={projectRequirements} chatEndRef={chatEndRef} />}
         {view === 'plan' && <PlanView setView={(nextView) => setView(nextView)} reportNumber={report?.report_number ?? null} reportContent={report?.report_content ?? null} isGeneratingPlan={isGeneratingPlan} />}
       </AnimatePresence>
       <AnimatePresence>

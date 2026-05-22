@@ -13,6 +13,7 @@ interface ChatViewProps {
   setView: (view: 'map') => void;
   handleGeneratePlan: () => void;
   isGeneratingPlan: boolean;
+  isChatResponding: boolean;
   inputValue: string;
   chatEndRef: React.RefObject<HTMLDivElement | null>;
 }
@@ -27,6 +28,7 @@ export const ChatView = ({
   setView,
   handleGeneratePlan,
   isGeneratingPlan,
+  isChatResponding,
   inputValue,
   chatEndRef,
 }: ChatViewProps) => {
@@ -45,6 +47,31 @@ export const ChatView = ({
             <div className={`max-w-[80%] px-6 py-4 rounded-2xl text-sm leading-relaxed ${msg.type === 'user' ? 'bg-black text-white rounded-tr-none shadow-lg' : 'bg-white border border-black/5 rounded-tl-none shadow-sm'}`}>{msg.content}</div>
           </motion.div>
         ))}
+        {isChatResponding && (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex items-start"
+          >
+            <div className="bg-white border border-black/5 rounded-2xl rounded-tl-none shadow-sm px-5 py-4">
+              <div className="flex items-center gap-2">
+                {[0, 1, 2].map((index) => (
+                  <motion.span
+                    key={index}
+                    className="w-2.5 h-2.5 rounded-full bg-black/70"
+                    animate={{ y: [0, -4, 0], opacity: [0.35, 1, 0.35] }}
+                    transition={{
+                      duration: 0.8,
+                      repeat: Infinity,
+                      ease: 'easeInOut',
+                      delay: index * 0.12,
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+          </motion.div>
+        )}
         <div ref={chatEndRef} />
       </div>
 
@@ -52,8 +79,22 @@ export const ChatView = ({
         <div className="rounded-[28px] bg-[#F5F5F7]/92 backdrop-blur-md px-2 pt-2 pb-4">
           <div className="flex flex-wrap gap-2 mb-3 justify-center">{members.map(m => (<motion.button key={m.id} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={() => handleAddMemberToInput(m.name)} className="px-3 py-1.5 bg-white border border-black/5 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-sm hover:bg-black hover:text-white transition-colors">{m.role}</motion.button>))}</div>
           <div className="relative glass p-2 rounded-full shadow-2xl border border-black/5">
-            <input type="text" value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSendMessage()} placeholder="Message your AI team..." className="w-full bg-transparent px-6 py-3 outline-none text-sm" />
-            <button onClick={handleSendMessage} className="absolute right-2 top-2 bottom-2 aspect-square bg-black text-white rounded-full flex items-center justify-center hover:scale-105 active:scale-95 transition-all"><Send size={18} /></button>
+            <input
+              type="text"
+              value={chatInput}
+              onChange={e => setChatInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleSendMessage()}
+              placeholder="Message your AI team..."
+              disabled={isChatResponding}
+              className="w-full bg-transparent px-6 py-3 outline-none text-sm disabled:opacity-50"
+            />
+            <button
+              onClick={handleSendMessage}
+              disabled={isChatResponding}
+              className="absolute right-2 top-2 bottom-2 aspect-square bg-black text-white rounded-full flex items-center justify-center hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:hover:scale-100"
+            >
+              <Send size={18} />
+            </button>
           </div>
           <div className="flex justify-between mt-5 px-2">
             <motion.button whileHover={{ x: -5 }} onClick={() => setView('map')} className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-[#86868B] hover:text-black transition-colors"><ArrowLeft size={16} /> Back to Map</motion.button>
